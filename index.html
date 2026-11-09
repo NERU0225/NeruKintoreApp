@@ -215,6 +215,23 @@
   .chips button[aria-pressed=true]{border-color:var(--accent);background:#FFF4F0;font-weight:600}
   .chips .ord{font-size:11px;color:var(--accent);font-weight:700;min-width:1em}
   .muted{color:var(--sub)}
+  /* v0.3 スキップ */
+  .skip-btn{width:100%;margin-top:8px;background:none;border:1px solid var(--line);border-radius:12px;padding:12px;
+    font-size:14px;color:#4A5058;cursor:pointer;font-family:var(--font)}
+  .skip-btn:active{background:var(--bg)}
+  .pskip{margin-left:auto;flex:none;background:var(--bg);border:none;border-radius:7px;color:#6B7480;font-size:12px;
+    padding:6px 10px;cursor:pointer;font-family:var(--font)}
+  .pskip.on{background:#6B7480;color:#fff}
+  .pskip:disabled{visibility:hidden}
+  .prow.is-skip b{color:var(--sub);text-decoration:line-through}
+  .skip-banner{background:#EEF0F2;color:#4A5058;font-weight:700;text-align:center;border-radius:12px;padding:12px;margin-top:12px;line-height:1.5}
+  .done-banner small,.skip-banner small{display:block;font-weight:500;font-size:12px;opacity:.8}
+  .tag.skip{color:#4A5058;background:#EEF0F2}
+  .chk.skip{border-color:#C7CDD4;background:#EEF0F2;color:#6B7480}
+  .wbody.skipped .nm{color:var(--sub)}
+  .cal-nm.skipped{opacity:.4}
+  .cal-mark.sk{color:#8B9199}
+  .cal-sum .sk{color:#6B7480}
 </style>
 </head>
 <body>
@@ -381,10 +398,11 @@
 <script>
 'use strict';
 /* ============ バージョン ============ */
-const APP_VERSION='v0.2';
+const APP_VERSION='v0.3';
 /* 整数版ごとにまとめる。released が空なら「検証中」 */
 const CHANGELOG=[
   {ver:'v1', released:'', items:[
+    ['v0.3','スキップを追加（部位ごと・まとめて）。筋肉痛などで休む部位は、翌日にずらさず次の組み合わせへ進む'],
     ['v0.2','部位を1つずつ登録し、日ごとに組み合わせを選べるように。チェックは部位ごと。毎日やる項目（ストレッチなど）を追加'],
     ['v0.1','初版。ルーティンの登録、実施チェック、未実施の日は翌日にずれ込む、週表示・カレンダー、バックアップ']
   ]}
@@ -416,6 +434,7 @@ const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('show');
    anchor: {date,idx}                                 この日に menus[idx] から数え始める
    checks: {'YYYY-MM-DD':[部位id]}                    チェックした部位。その日の組み合わせが全部入っていれば実施
    dailyChecks: {'YYYY-MM-DD':[毎日の項目id]}
+   skips:  {'YYYY-MM-DD':[部位id]}                    スキップした部位（筋肉痛など）。チェックとは同時に付かない
    hist:   {'YYYY-MM-DD':{state,name,color,parts:[{name,color,done}]}}
            アンカーより前の日の凍結した記録（計算し直せないため）
    lastBackupAt */
@@ -428,7 +447,7 @@ function seed(){
   return {format:FORMAT,parts:P,
     menus:[{id:uid(),partIds:[P[0].id,P[1].id]},{id:uid(),partIds:[P[2].id,P[3].id]},{id:uid(),partIds:[P[4].id,P[5].id]}],
     daily:[{id:uid(),name:'ストレッチ',exercises:[],since:todayKey()}],
-    anchor:{date:todayKey(),idx:0},checks:{},dailyChecks:{},hist:{},lastBackupAt:null};
+    anchor:{date:todayKey(),idx:0},checks:{},dailyChecks:{},skips:{},hist:{},lastBackupAt:null};
 }
 /* v0.1 のデータ（メニューが「腕と肩」のような名前で1つ）を v0.2 の形に移す。
    名前を「と・、＋」で分けて部位にし、これまでの実施・未実施は名前つきで凍結する */
@@ -461,7 +480,7 @@ function migrateV1(d){
   }
   menus.forEach(m=>{delete m._name;delete m._color});
   return {format:FORMAT,parts,menus,daily:[],anchor:{date:A<=today?today:A,idx:n?((k%n)+n)%n:0},
-    checks,dailyChecks:{},hist,lastBackupAt:d.lastBackupAt||null};
+    checks,dailyChecks:{},skips:{},hist,lastBackupAt:d.lastBackupAt||null};
 }
 function normalize(d){
   if(!d||typeof d!=='object')return seed();
@@ -478,6 +497,8 @@ function normalize(d){
   if(!d.checks)d.checks={};
   if(!d.dailyChecks)d.dailyChecks={};
   if(!d.hist)d.hist={};
+  if(!d.skips||typeof d.skips!=='object')d.skips={};
+  for(const k of Object.keys(d.skips))if(!Array.isArray(d.skips[k])||!d.skips[k].length)delete d.skips[k];
   return d;
 }
 function load(){
@@ -496,28 +517,32 @@ const menuName=m=>menuParts(m).map(p=>p.name).join('・');
 const menuColor=m=>{const ps=menuParts(m);return ps.length?ps[0].color:'#C7CDD4'};
 const dotsHTML=cols=>cols.map(c=>`<span class="dot" style="background:${c}"></span>`).join('');
 const checksOf=key=>data.checks[key]||[];
-/* その日の組み合わせの部位がすべてチェックされていれば実施 */
-function dayDone(key,m){
+const skipsOf=key=>data.skips[key]||[];
+/* その日の組み合わせの部位が、すべて「チェック」か「スキップ」になっていれば順番を進める */
+function dayResolved(key,m){
   const ps=m?m.partIds:[];
   if(!ps.length)return false;
-  const c=checksOf(key);
-  return ps.every(id=>c.includes(id));
+  const c=checksOf(key), sk=skipsOf(key);
+  return ps.every(id=>c.includes(id)||sk.includes(id));
 }
+/* 進めた日の state。1つでも実施していれば done（実施に数える）、全部スキップなら skipped */
+const resolvedState=(key,m)=>m.partIds.some(id=>checksOf(key).includes(id))?'done':'skipped';
 
 /* ============ 予定の計算（このアプリの核） ============
    アンカーの日から1日ずつ進め、その日の組み合わせは menus[k % n]。
-   - 組み合わせの部位がすべてチェックされた日だけ k を進める → それ以外の日は翌日にずれ込む
+   - 組み合わせの部位がすべて「チェック」か「スキップ」の日だけ k を進める
+     → 何も付いていない部位が残る日（怠けた日）は翌日にずれ込む。スキップは翌日にずらさない
    - 今日がまだ未実施でも、明日以降は「今日やる」前提で k を進めて予定を出す
    - アンカーより前の日は、凍結した記録（hist）だけを表示する
-   返り値: {key:{state,menu,name,color,checked,frozen}}
-     state: done（実施）/ missed（未実施の過去。一部だけの日も含む）/ today（今日・未実施）
+   返り値: {key:{state,menu,name,color,checked,skipped,frozen}}
+     state: done（実施。一部スキップを含む）/ skipped（全部スキップ）/ missed（未実施の過去）/ today（今日・未完了）
             / plan（未来の予定）/ past（記録なし） */
 function schedule(fromKey,toKey){
   const res={}, today=todayKey(), n=data.menus.length, A=data.anchor.date;
   for(let d=parseDK(fromKey);DK(d)<=toKey&&DK(d)<A;d=addDays(d,1)){
     const k=DK(d), h=data.hist[k];
-    res[k]=h?{state:h.state,menu:null,name:h.name,color:h.color||'#9AA1A9',checked:[],frozen:h.parts||[]}
-      :{state:'past',menu:null,name:'',color:'',checked:[],frozen:[]};
+    res[k]=h?{state:h.state,menu:null,name:h.name,color:h.color||'#9AA1A9',checked:[],skipped:[],frozen:h.parts||[]}
+      :{state:'past',menu:null,name:'',color:'',checked:[],skipped:[],frozen:[]};
   }
   if(toKey<A)return res;
   let k=data.anchor.idx;
@@ -527,24 +552,27 @@ function schedule(fromKey,toKey){
     const m=n?data.menus[((k%n)+n)%n]:null;
     let state;
     if(!m)state=key>today?'plan':key===today?'today':'past';
-    else if(key<today){if(dayDone(key,m)){state='done';k++}else state='missed'}
-    else if(key===today){state=dayDone(key,m)?'done':'today';k++}
+    else if(key<today){if(dayResolved(key,m)){state=resolvedState(key,m);k++}else state='missed'}
+    else if(key===today){state=dayResolved(key,m)?resolvedState(key,m):'today';k++}
     else{state='plan';k++}
     if(key>=fromKey)res[key]={state,menu:m,name:m?menuName(m):'',color:m?menuColor(m):'',
-      checked:m?checksOf(key).filter(id=>m.partIds.includes(id)):[],frozen:[]};
+      checked:m?checksOf(key).filter(id=>m.partIds.includes(id)):[],
+      skipped:m?skipsOf(key).filter(id=>m.partIds.includes(id)):[],frozen:[]};
   }
   return res;
 }
 const dayInfo=key=>schedule(key,key)[key];
-/* 「次にやるメニュー」：今日が未実施なら今日、実施済みなら明日 */
+/* その日で順番が進むか（実施 or スキップ） */
+const advances=st=>st==='done'||st==='skipped';
+/* 「次にやるメニュー」：今日が未完了なら今日、完了（実施・スキップ）なら明日 */
 function nextPoint(){
   const today=todayKey(), n=data.menus.length;
-  const date=dayInfo(today).state==='done'?DK(addDays(new Date(),1)):today;
+  const date=advances(dayInfo(today).state)?DK(addDays(new Date(),1)):today;
   if(!n)return {date,idx:0,menu:null};
   let k=data.anchor.idx;
   for(let d=parseDK(data.anchor.date);DK(d)<date;d=addDays(d,1)){
     const key=DK(d), m=data.menus[((k%n)+n)%n];
-    if(key<today){if(dayDone(key,m))k++}
+    if(key<today){if(dayResolved(key,m))k++}
     else k++;                      // 今日（実施済み）
   }
   const idx=((k%n)+n)%n;
@@ -558,9 +586,9 @@ function freezePast(){
   if(endKey<A)return np;
   const s=schedule(A,endKey);
   for(const [k,v] of Object.entries(s)){
-    if((v.state==='done'||v.state==='missed')&&v.menu){
+    if((v.state==='done'||v.state==='missed'||v.state==='skipped')&&v.menu){
       data.hist[k]={state:v.state,name:v.name,color:v.color,
-        parts:menuParts(v.menu).map(p=>({name:p.name,color:p.color,done:v.checked.includes(p.id)}))};
+        parts:menuParts(v.menu).map(p=>({name:p.name,color:p.color,done:v.checked.includes(p.id),skip:v.skipped.includes(p.id)}))};
     }
   }
   return np;
@@ -649,41 +677,56 @@ $('askNo').onclick=()=>askClose(false);
 })();
 
 /* ============ チェック ============ */
-/* 部位のチェックを書き換える。過去の日で「実施／未実施」が変わる時だけ確認する
-   （それ以降の予定が組み直されるため）。一部だけの変化では予定は動かない */
-async function setParts(key,list){
+/* その日の部位のチェックとスキップをまとめて書き換える。
+   過去の日で「順番が進むか」が変わる時だけ確認する（それ以降の予定が組み直されるため）。
+   一部だけの変化や、スキップ⇔実施の入れ替えでは予定は動かない */
+const setList=(map,key,list)=>{if(list.length)map[key]=list;else delete map[key]};
+async function setDay(key,checks,skips){
   if(!canTogglePart(key))return false;
-  const before=dayInfo(key).state==='done';
-  const prev=checksOf(key);
-  if(list.length)data.checks[key]=list;else delete data.checks[key];
-  const after=dayInfo(key).state==='done';
-  if(key<todayKey()&&before!==after){
-    if(prev.length)data.checks[key]=prev;else delete data.checks[key];
-    const msg=after
-      ?`${md(parseDK(key))} を実施済みにします。\nそれ以降のメニューが組み直されます。`
-      :`${md(parseDK(key))} を未実施に戻します。\nこの日の組み合わせが翌日にずれ込み、それ以降も組み直されます。`;
+  const st0=dayInfo(key).state;
+  const pc=checksOf(key), ps=skipsOf(key);
+  setList(data.checks,key,checks);setList(data.skips,key,skips);
+  const st1=dayInfo(key).state;
+  if(key<todayKey()&&advances(st0)!==advances(st1)){
+    setList(data.checks,key,pc);setList(data.skips,key,ps);
+    const msg=advances(st1)
+      ?`${md(parseDK(key))} を完了にします（実施・スキップ）。\nそれ以降のメニューが組み直されます。`
+      :`${md(parseDK(key))} を未完了に戻します。\nこの日の組み合わせが翌日にずれ込み、それ以降も組み直されます。`;
     const wasDay=$('daySheet').classList.contains('open');
-    const ok=await ask(msg,after?'実施済みにする':'未実施に戻す');
+    const ok=await ask(msg,advances(st1)?'完了にする':'未完了に戻す');
     if(wasDay)open($('daySheet'));
     if(!ok)return false;
-    if(list.length)data.checks[key]=list;else delete data.checks[key];
+    setList(data.checks,key,checks);setList(data.skips,key,skips);
     save();render();refreshDay();toast('予定を組み直しました');
     return true;
   }
   save();render();refreshDay();
-  if(!before&&after)toast('おつかれさまでした');
+  if(!advances(st0)&&advances(st1))toast(st1==='done'?'おつかれさまでした':'スキップしました。次のメニューへ進みます');
   return true;
 }
+/* 部位のチェック。付けたらその部位のスキップは外す */
 function togglePart(key,id){
-  const c=checksOf(key);
-  return setParts(key,c.includes(id)?c.filter(x=>x!==id):[...c,id]);
+  const c=checksOf(key), on=!c.includes(id);
+  return setDay(key,on?[...c,id]:c.filter(x=>x!==id),on?skipsOf(key).filter(x=>x!==id):skipsOf(key));
 }
-/* まとめて：全部付いていれば全部外す、そうでなければ全部付ける */
+/* 部位のスキップ（筋肉痛など）。付けたらその部位のチェックは外す */
+function togglePartSkip(key,id){
+  const sk=skipsOf(key), on=!sk.includes(id);
+  return setDay(key,on?checksOf(key).filter(x=>x!==id):checksOf(key),on?[...sk,id]:sk.filter(x=>x!==id));
+}
+/* 何も付いていない部位 */
+const remainingOf=r=>r.menu?r.menu.partIds.filter(id=>!r.checked.includes(id)&&!r.skipped.includes(id)):[];
+/* まとめて実施：残りを全部チェック。残りがなければチェックを全部外す（スキップは残す） */
 function toggleAllParts(key){
   const r=dayInfo(key);if(!r.menu)return;
-  const all=r.menu.partIds.every(id=>r.checked.includes(id));
-  const others=checksOf(key).filter(id=>!r.menu.partIds.includes(id));
-  return setParts(key,all?others:[...others,...r.menu.partIds]);
+  const rem=remainingOf(r), c=checksOf(key);
+  return setDay(key,rem.length?[...c,...rem]:c.filter(id=>!r.menu.partIds.includes(id)),skipsOf(key));
+}
+/* まとめてスキップ：残りを全部スキップ。残りがなければスキップを全部外す */
+function skipRest(key){
+  const r=dayInfo(key);if(!r.menu)return;
+  const rem=remainingOf(r), sk=skipsOf(key);
+  return setDay(key,checksOf(key),rem.length?[...sk,...rem]:sk.filter(id=>!r.menu.partIds.includes(id)));
 }
 function toggleDaily(key,id){
   const item=data.daily.find(x=>x.id===id);
@@ -695,6 +738,9 @@ function toggleDaily(key,id){
 }
 /* チェックのボタンは data-pt="日付|部位id" / data-all="日付" / data-dl="日付|項目id" で共通に扱う */
 function onCheckClick(e){
+  const ps=e.target.closest('[data-ps]'), sr=e.target.closest('[data-skiprest]');
+  if(ps){const [k,id]=ps.dataset.ps.split('|');togglePartSkip(k,id);return true}
+  if(sr){skipRest(sr.dataset.skiprest);return true}
   const pt=e.target.closest('[data-pt]'), al=e.target.closest('[data-all]'), dl=e.target.closest('[data-dl]');
   if(pt){const [k,id]=pt.dataset.pt.split('|');togglePart(k,id);return true}
   if(al){toggleAllParts(al.dataset.all);return true}
@@ -718,15 +764,16 @@ function partsBlockHTML(key,r){
   if(r.menu){
     const can=canTogglePart(key);
     return menuParts(r.menu).map(p=>{
-      const on=r.checked.includes(p.id);
-      return `<div class="pblock"><div class="prow">
-        <button class="chk sm${on?' on':''}" data-pt="${key}|${p.id}" ${can?'':'disabled'} aria-label="${esc(p.name)}をチェック">✓</button>
-        <span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b></div>${exHTML(p.exercises)}</div>`;
+      const on=r.checked.includes(p.id), sk=r.skipped.includes(p.id);
+      return `<div class="pblock"><div class="prow${sk?' is-skip':''}">
+        <button class="chk sm${on?' on':sk?' skip':''}" data-pt="${key}|${p.id}" ${can?'':'disabled'} aria-label="${esc(p.name)}をチェック">${sk?'−':'✓'}</button>
+        <span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b>
+        <button class="pskip${sk?' on':''}" data-ps="${key}|${p.id}" ${can&&!on?'':'disabled'}>${sk?'スキップ中':'スキップ'}</button></div>${sk?'':exHTML(p.exercises)}</div>`;
     }).join('');
   }
   // アンカーより前の凍結した記録（表示だけ）
-  return (r.frozen||[]).map(p=>`<div class="pblock"><div class="prow">
-      <button class="chk sm${p.done?' on':' ng'}" disabled style="visibility:visible">${p.done?'✓':'×'}</button>
+  return (r.frozen||[]).map(p=>`<div class="pblock"><div class="prow${p.skip?' is-skip':''}">
+      <button class="chk sm${p.done?' on':p.skip?' skip':' ng'}" disabled style="visibility:visible">${p.done?'✓':p.skip?'−':'×'}</button>
       <span class="dot" style="background:${p.color||'#C7CDD4'}"></span><b>${esc(p.name)}</b></div></div>`).join('');
 }
 function dailyBlockHTML(key){
@@ -752,15 +799,21 @@ function renderToday(){
   }
   const s=schedule(key,DK(addDays(now,1)));
   const t=s[key], tm=s[DK(addDays(now,1))];
-  const done=t.state==='done';
+  const done=t.state==='done', skipped=t.state==='skipped';
+  const rem=remainingOf(t), skN=t.skipped.length, skNames=menuParts(t.menu).filter(p=>t.skipped.includes(p.id)).map(p=>p.name).join('・');
+  const can=canTogglePart(key);
   const cols=t.menu?menuParts(t.menu).map(p=>p.color):[t.color];
   const total=t.menu?t.menu.partIds.length:0;
   el.innerHTML=`<div class="today-date">今日 ${dateLabel(now)}</div>
     <div class="today-menu"><span class="dots">${dotsHTML(cols)}</span><b>${esc(t.name)}</b></div>
-    <div class="today-sub">明日は ${esc(tm?tm.name:'')}${done?'':'（今日ぜんぶやった場合）'}</div>
+    <div class="today-sub">明日は ${esc(tm?tm.name:'')}${done||skipped?'':'（今日の部位をぜんぶ実施かスキップした場合）'}</div>
     <div>${partsBlockHTML(key,t)}</div>
-    ${done?'<div class="done-banner">✓ 今日のメニュー完了</div>'
-      :canTogglePart(key)&&total>1?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${t.checked.length}/${total}）</button>`:''}`;
+    ${done?`<div class="done-banner">✓ 今日のメニュー完了${skN?`<small>${esc(skNames)} はスキップ</small>`:''}</div>`
+      :skipped?'<div class="skip-banner">今日はスキップ<small>明日は次のメニューへ進みます</small></div>':''}
+    ${!can?'':rem.length
+      ?(total>1?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${t.checked.length}/${total}）</button>`:'')
+        +`<button class="skip-btn" data-skiprest="${key}">${t.checked.length||skN?'残りをスキップ（筋肉痛など）':'今日はスキップ（筋肉痛など）'}</button>`
+      :skN?`<button class="skip-btn" data-skiprest="${key}">スキップを取り消す</button>`:''}`;
 }
 $('todayCard').onclick=onCheckClick;
 function renderDaily(){
@@ -784,8 +837,9 @@ function renderStats(){
     if(k>=ms&&k<=me)m++;
   }
   // 連続：今日が未実施なら昨日から数える（今日はまだこれからなので途切れ扱いにしない）
-  let d=s[today]&&s[today].state==='done'?now:addDays(now,-1), st=0;
-  while(s[DK(d)]&&s[DK(d)].state==='done'){st++;d=addDays(d,-1)}
+  // 全部スキップの日は数えないが、途切れ扱いにもしない（筋肉痛などの休養のため）
+  let d=s[today]&&advances(s[today].state)?now:addDays(now,-1), st=0;
+  while(s[DK(d)]&&advances(s[DK(d)].state)){if(s[DK(d)].state==='done')st++;d=addDays(d,-1)}
   $('stWeek').textContent=w;$('stMonth').textContent=m;$('stStreak').textContent=st;
 }
 function renderWeek(){
@@ -796,20 +850,22 @@ function renderWeek(){
   for(let i=0;i<7;i++){
     const d=addDays(weekStart,i), key=DK(d), r=s[key];
     const cls=d.getDay()===0?'sun':d.getDay()===6?'sat':'';
-    const total=r.menu?r.menu.partIds.length:0, got=r.checked.length;
+    const total=r.menu?r.menu.partIds.length:0, got=r.checked.length+r.skipped.length;
     const part=total&&got>0&&got<total?` ${got}/${total}`:'';
     const tag=r.state==='missed'?`<span class="tag missed">未実施${part}</span>`
+      :r.state==='skipped'?'<span class="tag skip">スキップ</span>'
+      :r.state==='done'&&r.skipped.length?'<span class="tag skip">一部スキップ</span>'
       :r.state==='today'?`<span class="tag today">今日${part}</span>`
       :r.state==='plan'?'<span class="tag plan">予定</span>':'';
     const cols=r.menu?menuParts(r.menu).map(p=>p.color):r.name?[r.color]:[];
-    const dots=cols.length?`<span class="dots"${r.state==='missed'?' style="opacity:.4"':''}>${dotsHTML(cols)}</span>`:'';
+    const dots=cols.length?`<span class="dots"${r.state==='missed'||r.state==='skipped'?' style="opacity:.4"':''}>${dotsHTML(cols)}</span>`:'';
     const nm=r.name||(r.state==='past'?'—':'');
-    const ck=r.state==='done'?' on':part?' half':'';
+    const ck=r.state==='done'?' on':r.state==='skipped'?' skip':part?' half':'';
     html+=`<div class="wrow${key===today?' is-today':''}">
       <div class="wday ${cls}"><b>${d.getDate()}</b>${WD[d.getDay()]}曜</div>
       <button class="wbody ${r.state}" data-day="${key}">${dots}<span class="nm">${esc(nm)}</span>${tag}</button>
       <button class="chk${ck}" data-all="${key}" aria-label="${md(d)}をまとめてチェック"
-        ${canTogglePart(key)&&r.menu?'':'disabled'}>${part?got+'/'+total:'✓'}</button>
+        ${canTogglePart(key)&&r.menu&&r.state!=='skipped'?'':'disabled'}${r.state==='skipped'?' style="visibility:visible"':''}>${r.state==='skipped'?'−':part?got+'/'+total:'✓'}</button>
     </div>`;
   }
   $('weekList').innerHTML=html;
@@ -830,18 +886,20 @@ function renderCal(){
   const first=new Date(y,mo,1), last=new Date(y,mo+1,0), today=todayKey();
   const s=schedule(DK(first),DK(last));
   const lead=(first.getDay()+6)%7;
-  let html='', ok=0, ng=0;
+  let html='', ok=0, ng=0, sk=0;
   for(let i=0;i<lead;i++)html+='<div class="cal-cell empty"></div>';
   for(let day=1;day<=last.getDate();day++){
     const d=new Date(y,mo,day), key=DK(d), r=s[key];
     const cls=['cal-cell',d.getDay()===0?'sun':d.getDay()===6?'sat':'',key===today?'today':''].join(' ');
     if(r.state==='done')ok++;
     if(r.state==='missed')ng++;
+    if(r.state==='skipped')sk++;
     let nm='';
     if(r.name){
-      nm=`<span class="cal-nm ${r.state==='missed'?'missed':r.state==='plan'?'plan':''}" style="background:${r.color||'#9AA1A9'}">${esc(r.name.slice(0,5))}</span>`;
+      nm=`<span class="cal-nm ${r.state==='missed'?'missed':r.state==='plan'?'plan':r.state==='skipped'?'skipped':''}" style="background:${r.color||'#9AA1A9'}">${esc(r.name.slice(0,5))}</span>`;
     }
-    const mark=r.state==='done'?'<span class="cal-mark ok">✓</span>':r.state==='missed'?'<span class="cal-mark ng">×</span>':'<span class="cal-mark"></span>';
+    const mark=r.state==='done'?'<span class="cal-mark ok">✓</span>':r.state==='missed'?'<span class="cal-mark ng">×</span>'
+      :r.state==='skipped'?'<span class="cal-mark sk">−</span>':'<span class="cal-mark"></span>';
     // 毎日の項目：全部できた日は緑、過去で残った日は灰色の輪
     const dl=dailyFor(key);
     let dd='';
@@ -853,7 +911,7 @@ function renderCal(){
     html+=`<button class="${cls}" data-day="${key}"><span class="cal-d">${day}</span>${nm}${mark}${dd}</button>`;
   }
   $('calGrid').innerHTML=html;
-  $('calSum').innerHTML=`実施 <b class="ok">${ok}</b> 日　未実施 <b class="ng">${ng}</b> 日`;
+  $('calSum').innerHTML=`実施 <b class="ok">${ok}</b> 日　未実施 <b class="ng">${ng}</b> 日`+(sk?`　スキップ <b class="sk">${sk}</b> 日`:'');
   $('calLegend').innerHTML=data.parts.map(p=>`<span><i class="dot" style="background:${p.color}"></i>${esc(p.name)}</span>`).join('')
     +(data.daily.length?'<span><i class="cal-daily ok"></i>毎日の項目ぜんぶ</span>':'');
 }
@@ -871,14 +929,17 @@ function fillDay(){
   const cols=r.menu?menuParts(r.menu).map(p=>p.color):r.name?[r.color]:[];
   $('dayDots').innerHTML=dotsHTML(cols);
   $('dayMenu').textContent=r.name||'記録なし';
-  const total=r.menu?r.menu.partIds.length:0, got=r.checked.length;
-  $('daySub').textContent={done:'実施済み',
+  const total=r.menu?r.menu.partIds.length:0, got=r.checked.length, skN=r.skipped.length;
+  $('daySub').textContent={done:skN?`実施済み（${skN}つスキップ）`:'実施済み',
+    skipped:'スキップ（翌日は次の組み合わせへ進みました）',
     missed:got?`一部だけ実施（${got}/${total}）。この組み合わせは翌日にずれ込みました`:'未実施（この組み合わせは翌日にずれ込みました）',
-    today:'今日のメニュー',plan:'予定（それまで毎日ぜんぶ実施した場合）',past:''}[r.state]
+    today:'今日のメニュー',plan:'予定（それまで毎日、実施かスキップで進めた場合）',past:''}[r.state]
     +(r.state!=='plan'&&!canTogglePart(key)&&key<=todayKey()&&r.state!=='past'?' ・記録の表示だけです':'');
   const daily=key<=todayKey()?dailyBlockHTML(key):'';
   $('dayBody').innerHTML=partsBlockHTML(key,r)
-    +(r.menu&&canTogglePart(key)&&total>1&&r.state!=='done'?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${got}/${total}）</button>`:'')
+    +(r.menu&&canTogglePart(key)&&total>1&&remainingOf(r).length?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${got}/${total}）</button>`:'')
+    +(r.menu&&canTogglePart(key)?(remainingOf(r).length?`<button class="skip-btn" data-skiprest="${key}">${got||skN?'残りをスキップ（筋肉痛など）':'この日をスキップ（筋肉痛など）'}</button>`
+      :skN?`<button class="skip-btn" data-skiprest="${key}">スキップを取り消す</button>`:''):'')
     +(daily?`<p class="sec-title">毎日やること</p>${daily}`:'');
 }
 $('dayBody').onclick=onCheckClick;
@@ -1093,7 +1154,7 @@ $('impFile').onchange=async e=>{
 let backupDismissed=false;
 function updateBackupBar(){
   const bar=$('backupBar');
-  const has=Object.keys(data.checks).length>0||Object.keys(data.hist).length>0;
+  const has=Object.keys(data.checks).length>0||Object.keys(data.hist).length>0||Object.keys(data.skips).length>0;
   const last=data.lastBackupAt?new Date(data.lastBackupAt).getTime():0;
   const days=last?Math.floor((Date.now()-last)/86400000):null;
   const show=has&&!backupDismissed&&(days===null||days>=14);
