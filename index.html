@@ -232,6 +232,17 @@
   .cal-nm.skipped{opacity:.4}
   .cal-mark.sk{color:#8B9199}
   .cal-sum .sk{color:#6B7480}
+  /* v0.4 メモ */
+  .pmemo{margin-left:auto;flex:none;background:var(--bg);border:none;border-radius:7px;color:var(--blue);font-size:12px;
+    padding:6px 10px;cursor:pointer;font-family:var(--font)}
+  .pmemo.on{background:#EAF3FF;font-weight:600}
+  .prow .pmemo+.pskip{margin-left:6px}
+  .note{margin:6px 0 0 44px;padding:7px 10px;background:#F7F8FA;border-radius:8px;font-size:13px;line-height:1.55;
+    white-space:pre-wrap;word-break:break-word;color:#33383E}
+  .memo-ref{list-style:none;margin:0 0 10px;padding:0;font-size:12px;color:var(--sub)}
+  .memo-ref li{padding:1px 0}
+  #memoText{width:100%;min-height:160px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;
+    color:var(--text);background:var(--card);resize:vertical;line-height:1.5}
 </style>
 </head>
 <body>
@@ -369,6 +380,19 @@
   </div>
 </div>
 
+<!-- メモ（部位ごと・日ごと） -->
+<div class="sheet" id="memoSheet" role="dialog" aria-modal="true" aria-label="メモ">
+  <div class="grab"></div>
+  <h3 id="memoTitle">メモ</h3>
+  <ul class="memo-ref" id="memoRef"></ul>
+  <textarea id="memoText" placeholder="例：アームカール&#10;1セット目 8kg × 10回&#10;2セット目 5kg × 10回"></textarea>
+  <div class="actions">
+    <button class="btn btn-ghost" id="memoDel">消す</button>
+    <button class="btn btn-sub" id="memoCancel" style="flex:0 0 auto;padding:14px 18px">やめる</button>
+    <button class="btn btn-primary" id="memoSave">保存</button>
+  </div>
+</div>
+
 <!-- 次にやるメニュー -->
 <div class="sheet" id="nextSheet" role="dialog" aria-modal="true" aria-label="次にやるメニュー">
   <div class="grab"></div>
@@ -398,10 +422,11 @@
 <script>
 'use strict';
 /* ============ バージョン ============ */
-const APP_VERSION='v0.3';
+const APP_VERSION='v0.4';
 /* 整数版ごとにまとめる。released が空なら「検証中」 */
 const CHANGELOG=[
   {ver:'v1', released:'', items:[
+    ['v0.4','部位ごとにその日のメモを残せるように（重さ・回数など）。スキップの左の「メモ」から'],
     ['v0.3','スキップを追加（部位ごと・まとめて）。筋肉痛などで休む部位は、翌日にずらさず次の組み合わせへ進む'],
     ['v0.2','部位を1つずつ登録し、日ごとに組み合わせを選べるように。チェックは部位ごと。毎日やる項目（ストレッチなど）を追加'],
     ['v0.1','初版。ルーティンの登録、実施チェック、未実施の日は翌日にずれ込む、週表示・カレンダー、バックアップ']
@@ -434,6 +459,7 @@ const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('show');
    anchor: {date,idx}                                 この日に menus[idx] から数え始める
    checks: {'YYYY-MM-DD':[部位id]}                    チェックした部位。その日の組み合わせが全部入っていれば実施
    dailyChecks: {'YYYY-MM-DD':[毎日の項目id]}
+   notes:  {'YYYY-MM-DD':{部位id:'メモ'}}             その日のその部位のメモ。予定の計算には使わない
    skips:  {'YYYY-MM-DD':[部位id]}                    スキップした部位（筋肉痛など）。チェックとは同時に付かない
    hist:   {'YYYY-MM-DD':{state,name,color,parts:[{name,color,done}]}}
            アンカーより前の日の凍結した記録（計算し直せないため）
@@ -447,7 +473,7 @@ function seed(){
   return {format:FORMAT,parts:P,
     menus:[{id:uid(),partIds:[P[0].id,P[1].id]},{id:uid(),partIds:[P[2].id,P[3].id]},{id:uid(),partIds:[P[4].id,P[5].id]}],
     daily:[{id:uid(),name:'ストレッチ',exercises:[],since:todayKey()}],
-    anchor:{date:todayKey(),idx:0},checks:{},dailyChecks:{},skips:{},hist:{},lastBackupAt:null};
+    anchor:{date:todayKey(),idx:0},checks:{},dailyChecks:{},skips:{},notes:{},hist:{},lastBackupAt:null};
 }
 /* v0.1 のデータ（メニューが「腕と肩」のような名前で1つ）を v0.2 の形に移す。
    名前を「と・、＋」で分けて部位にし、これまでの実施・未実施は名前つきで凍結する */
@@ -480,7 +506,7 @@ function migrateV1(d){
   }
   menus.forEach(m=>{delete m._name;delete m._color});
   return {format:FORMAT,parts,menus,daily:[],anchor:{date:A<=today?today:A,idx:n?((k%n)+n)%n:0},
-    checks,dailyChecks:{},skips:{},hist,lastBackupAt:d.lastBackupAt||null};
+    checks,dailyChecks:{},skips:{},notes:{},hist,lastBackupAt:d.lastBackupAt||null};
 }
 function normalize(d){
   if(!d||typeof d!=='object')return seed();
@@ -498,6 +524,7 @@ function normalize(d){
   if(!d.dailyChecks)d.dailyChecks={};
   if(!d.hist)d.hist={};
   if(!d.skips||typeof d.skips!=='object')d.skips={};
+  if(!d.notes||typeof d.notes!=='object')d.notes={};
   for(const k of Object.keys(d.skips))if(!Array.isArray(d.skips[k])||!d.skips[k].length)delete d.skips[k];
   return d;
 }
@@ -588,7 +615,7 @@ function freezePast(){
   for(const [k,v] of Object.entries(s)){
     if((v.state==='done'||v.state==='missed'||v.state==='skipped')&&v.menu){
       data.hist[k]={state:v.state,name:v.name,color:v.color,
-        parts:menuParts(v.menu).map(p=>({name:p.name,color:p.color,done:v.checked.includes(p.id),skip:v.skipped.includes(p.id)}))};
+        parts:menuParts(v.menu).map(p=>({id:p.id,name:p.name,color:p.color,done:v.checked.includes(p.id),skip:v.skipped.includes(p.id)}))};
     }
   }
   return np;
@@ -738,6 +765,8 @@ function toggleDaily(key,id){
 }
 /* チェックのボタンは data-pt="日付|部位id" / data-all="日付" / data-dl="日付|項目id" で共通に扱う */
 function onCheckClick(e){
+  const mm=e.target.closest('[data-memo]');
+  if(mm){const [k,id]=mm.dataset.memo.split('|');openMemo(k,id);return true}
   const ps=e.target.closest('[data-ps]'), sr=e.target.closest('[data-skiprest]');
   if(ps){const [k,id]=ps.dataset.ps.split('|');togglePartSkip(k,id);return true}
   if(sr){skipRest(sr.dataset.skiprest);return true}
@@ -747,6 +776,37 @@ function onCheckClick(e){
   if(dl){const [k,id]=dl.dataset.dl.split('|');toggleDaily(k,id);return true}
   return false;
 }
+
+/* ============ メモ ============ */
+/* 入力欄は専用のシートに置く（他のシートの中に置かない）。日の詳細から開いた時は、閉じたら詳細に戻る */
+let memoKey=null, memoId=null, memoBack=false;
+function openMemo(key,id){
+  const p=partById(id);
+  memoKey=key;memoId=id;
+  memoBack=$('daySheet').classList.contains('open');
+  $('memoTitle').textContent=`${p?p.name:'部位'}のメモ（${md(parseDK(key))}）`;
+  $('memoRef').innerHTML=p&&p.exercises.length?p.exercises.map(x=>`<li>・${esc(x)}</li>`).join(''):'';
+  $('memoText').value=noteOf(key,id);
+  $('memoDel').hidden=!noteOf(key,id);
+  open($('memoSheet'));
+}
+function memoDone(){
+  if(memoBack&&dayKey){fillDay();open($('daySheet'))}else closeAll();
+}
+function setNote(key,id,text){
+  const t=text.replace(/\s+$/,'');
+  if(t){(data.notes[key]=data.notes[key]||{})[id]=t}
+  else if(data.notes[key]){delete data.notes[key][id];if(!Object.keys(data.notes[key]).length)delete data.notes[key]}
+  save();render();
+}
+$('memoSave').onclick=()=>{setNote(memoKey,memoId,$('memoText').value);memoDone();toast('メモを保存しました')};
+$('memoCancel').onclick=()=>memoDone();
+$('memoDel').onclick=async()=>{
+  const k=memoKey,id=memoId,back=memoBack;
+  const ok=await ask('このメモを消します。','消す');
+  if(!ok){open($('memoSheet'));return}
+  setNote(k,id,'');memoBack=back;memoDone();toast('メモを消しました');
+};
 
 /* ============ 表示 ============ */
 let tab='home';
@@ -768,14 +828,21 @@ function partsBlockHTML(key,r){
       return `<div class="pblock"><div class="prow${sk?' is-skip':''}">
         <button class="chk sm${on?' on':sk?' skip':''}" data-pt="${key}|${p.id}" ${can?'':'disabled'} aria-label="${esc(p.name)}をチェック">${sk?'−':'✓'}</button>
         <span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b>
-        <button class="pskip${sk?' on':''}" data-ps="${key}|${p.id}" ${can&&!on?'':'disabled'}>${sk?'スキップ中':'スキップ'}</button></div>${sk?'':exHTML(p.exercises)}</div>`;
+        ${memoBtnHTML(key,p.id)}
+        <button class="pskip${sk?' on':''}" data-ps="${key}|${p.id}" ${can&&!on?'':'disabled'}>${sk?'スキップ中':'スキップ'}</button></div>${sk?'':exHTML(p.exercises)}${noteHTML(key,p.id)}</div>`;
     }).join('');
   }
   // アンカーより前の凍結した記録（表示だけ）
   return (r.frozen||[]).map(p=>`<div class="pblock"><div class="prow${p.skip?' is-skip':''}">
       <button class="chk sm${p.done?' on':p.skip?' skip':' ng'}" disabled style="visibility:visible">${p.done?'✓':p.skip?'−':'×'}</button>
-      <span class="dot" style="background:${p.color||'#C7CDD4'}"></span><b>${esc(p.name)}</b></div></div>`).join('');
+      <span class="dot" style="background:${p.color||'#C7CDD4'}"></span><b>${esc(p.name)}</b>
+      ${p.id?memoBtnHTML(key,p.id):''}</div>${p.id?noteHTML(key,p.id):''}</div>`).join('');
 }
+/* メモ：今日と過去の日だけ。予定には関係しないので、アンカーより前の日でも書ける */
+const noteOf=(key,id)=>(data.notes[key]&&data.notes[key][id])||'';
+const canMemo=key=>key<=todayKey();
+const memoBtnHTML=(key,id)=>canMemo(key)?`<button class="pmemo${noteOf(key,id)?' on':''}" data-memo="${key}|${id}">メモ</button>`:'';
+const noteHTML=(key,id)=>{const t=noteOf(key,id);return t?`<div class="note">${esc(t)}</div>`:''};
 function dailyBlockHTML(key){
   const list=dailyFor(key);
   if(!list.length)return '';
@@ -1154,7 +1221,7 @@ $('impFile').onchange=async e=>{
 let backupDismissed=false;
 function updateBackupBar(){
   const bar=$('backupBar');
-  const has=Object.keys(data.checks).length>0||Object.keys(data.hist).length>0||Object.keys(data.skips).length>0;
+  const has=Object.keys(data.checks).length>0||Object.keys(data.hist).length>0||Object.keys(data.skips).length>0||Object.keys(data.notes).length>0;
   const last=data.lastBackupAt?new Date(data.lastBackupAt).getTime():0;
   const days=last?Math.floor((Date.now()-last)/86400000):null;
   const show=has&&!backupDismissed&&(days===null||days>=14);
