@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="筋トレ">
+<title>筋トレ</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<style>
+  :root{
+    --bg:#F4F5F7;--card:#FFFFFF;--line:#E6E8EB;--text:#1A1D21;--sub:#8B9199;
+    --accent:#E4572E;--blue:#1279D4;--red:#E8543F;--green:#17A673;--radius:12px;--tabh:60px;
+    --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none !important}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;
+    -webkit-text-size-adjust:100%;overscroll-behavior-y:none}
+  input,select,textarea,button{font-family:var(--font)}
+  /* iOSでフォーカス時に拡大しないよう入力欄は16px以上 */
+  input,select,textarea{font-size:16px}
+  .app{max-width:520px;margin:0 auto;padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 12px)}
+  .num{font-variant-numeric:tabular-nums}
+
+  header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+  header h1{font-size:16px;font-weight:600;margin:0}
+  .ver{position:absolute;left:8px;bottom:4px;font-size:10px;color:var(--sub);
+    font-variant-numeric:tabular-nums;background:none;border:none;padding:6px;cursor:pointer;font-family:var(--font)}
+  .ver:active{opacity:.5}
+  .warn-banner{background:#FDECEA;color:#A32A1B;font-size:12px;padding:10px 14px;text-align:center}
+  .backup-bar{display:flex;align-items:center;gap:8px;background:#FFF6E5;border-bottom:1px solid #F2E2C4;padding:9px 12px}
+  .bb-text{flex:1;min-width:0;font-size:12px;color:#7A5B12;line-height:1.4}
+  .bb-go{flex:none;background:#E9A23B;color:#fff;border:none;border-radius:7px;
+    font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer}
+  .bb-later{flex:none;background:none;border:none;color:#B08A45;font-size:14px;padding:4px 6px;cursor:pointer}
+
+  main{padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+  .card-title{font-size:12px;font-weight:600;color:var(--sub);margin:0 0 12px}
+  .head-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+  .head-row .card-title{margin:0}
+  .link{background:none;border:none;color:var(--blue);font-size:13px;padding:0;cursor:pointer;font-family:var(--font)}
+  .hint{font-size:11px;color:var(--sub);margin:0;line-height:1.55}
+
+  /* 今日 */
+  .today-date{font-size:12px;color:var(--sub)}
+  .today-menu{display:flex;align-items:center;gap:10px;margin:4px 0 2px}
+  .today-menu b{font-size:26px;font-weight:700;line-height:1.3}
+  .today-sub{font-size:12px;color:var(--sub);margin-bottom:12px;min-height:1em}
+  .ex-list{list-style:none;margin:0 0 14px;padding:0}
+  .ex-list li{font-size:14px;padding:7px 0;border-top:1px solid var(--line)}
+  .ex-list li:first-child{border-top:none}
+  .big-check{width:100%;border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:700;cursor:pointer;
+    background:var(--accent);color:#fff;font-family:var(--font)}
+  .big-check.done{background:#E8F6F0;color:var(--green)}
+  .big-check:active{opacity:.75}
+  .dot{flex:none;width:10px;height:10px;border-radius:50%}
+
+  .stats{display:flex;text-align:center}
+  .stats>div{flex:1}
+  .stats span{display:block;font-size:11px;color:var(--sub);margin-bottom:2px}
+  .stats b{font-size:20px;font-weight:700}
+  .stats small{font-size:11px;color:var(--sub);margin-left:2px;font-weight:500}
+
+  /* 週 */
+  .nav{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+  .nav button{background:none;border:none;color:var(--sub);font-size:17px;padding:4px 12px;cursor:pointer}
+  .nav b{font-size:13px;min-width:9em;text-align:center}
+  .wrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .wrow:first-child{border-top:none}
+  .wrow.is-today{background:#FFF4F0;margin:0 -16px;padding:10px 16px}
+  .wday{flex:none;width:3.4em;font-size:12px;color:var(--sub);line-height:1.3}
+  .wday b{display:block;font-size:15px;color:var(--text);font-variant-numeric:tabular-nums}
+  .wday.sun b{color:var(--red)} .wday.sat b{color:var(--blue)}
+  .wbody{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:none;padding:4px 0;
+    cursor:pointer;text-align:left;font-family:var(--font);color:inherit;font-size:15px}
+  .wbody .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wbody.missed .nm{color:var(--sub)}
+  .wbody.plan .nm{color:#4A5058}
+  .tag{flex:none;font-size:10px;font-weight:600;border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .tag.missed{color:var(--red);background:#FDECEA}
+  .tag.today{color:#fff;background:var(--accent)}
+  .tag.plan{color:var(--sub);background:var(--bg)}
+  .chk{flex:none;width:34px;height:34px;border-radius:50%;border:2px solid #CBD0D6;background:var(--card);
+    color:transparent;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+  .chk.on{background:var(--green);border-color:var(--green);color:#fff}
+  .chk:disabled{visibility:hidden}
+  .chk:active{transform:scale(.92)}
+
+  /* カレンダー */
+  .cal-sum{text-align:center;font-size:12px;color:var(--sub);margin-bottom:10px}
+  .cal-sum b{color:var(--text)} .cal-sum .ok{color:var(--green)} .cal-sum .ng{color:var(--red)}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .cal-head span{text-align:center;font-size:11px;color:var(--sub);padding:4px 0}
+  .cal-head .sun{color:var(--red)} .cal-head .sat{color:var(--blue)}
+  .cal-cell{min-height:58px;border-radius:8px;padding:4px 2px 3px;display:flex;flex-direction:column;align-items:center;gap:2px;
+    background:none;border:none;cursor:pointer;font-family:var(--font);color:inherit;min-width:0}
+  .cal-cell.empty{visibility:hidden}
+  .cal-cell:active{background:var(--bg)}
+  .cal-cell.today{background:#FFF4F0}
+  .cal-d{font-size:12px;font-variant-numeric:tabular-nums;line-height:1.2}
+  .cal-cell.sun .cal-d{color:var(--red)} .cal-cell.sat .cal-d{color:var(--blue)}
+  .cal-nm{font-size:9px;line-height:1.2;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:clip;
+    border-radius:4px;padding:1px 3px;color:#fff}
+  .cal-nm.missed{background:none!important;color:var(--sub);text-decoration:line-through}
+  .cal-nm.plan{opacity:.45}
+  .cal-mark{font-size:11px;line-height:1;font-weight:700;margin-top:auto;min-height:11px}
+  .cal-mark.ok{color:var(--green)} .cal-mark.ng{color:var(--red)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:11px;color:var(--sub)}
+  .legend span{display:flex;align-items:center;gap:5px}
+
+  /* 設定 */
+  .mrow{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+  .mrow:first-child{border-top:none}
+  .mrow .no{flex:none;width:1.4em;font-size:12px;color:var(--sub);text-align:right;font-variant-numeric:tabular-nums}
+  .mrow .mn{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:none;padding:4px 0;
+    text-align:left;cursor:pointer;font-family:var(--font);color:inherit;font-size:15px}
+  .mrow .mn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mrow .mn small{flex:none;font-size:11px;color:var(--sub)}
+  .mv{flex:none;width:30px;height:30px;border:none;border-radius:7px;background:var(--bg);color:var(--sub);cursor:pointer;font-size:12px}
+  .mv:disabled{opacity:.3}
+  .add-btn{width:100%;border:1px dashed #C9CED5;border-radius:10px;background:none;color:var(--blue);
+    font-size:14px;padding:11px;cursor:pointer;margin-top:10px;font-family:var(--font)}
+  .set-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:none;border:none;
+    padding:6px 0;cursor:pointer;font-family:var(--font);color:inherit;font-size:15px;text-align:left}
+  .set-row .val{display:flex;align-items:center;gap:7px;color:var(--text);font-weight:600}
+  .set-row .val::after{content:'›';color:var(--sub);font-weight:400;margin-left:4px}
+
+  .fab{display:none}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);
+    display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+  .tabs .in{display:flex;width:100%;max-width:520px}
+  .tabs button{flex:1;height:var(--tabh);background:none;border:none;cursor:pointer;color:var(--sub);font-size:10px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-family:var(--font)}
+  .tabs button i{font-size:18px;font-style:normal;line-height:1;
+    font-family:"Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-variant-emoji:text}
+  .tabs button[aria-selected=true]{color:var(--accent);font-weight:600}
+
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:8;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%) translateY(100%);width:100%;max-width:520px;
+    z-index:9;background:var(--card);border-radius:16px 16px 0 0;padding:6px 16px calc(20px + env(safe-area-inset-bottom));
+    transition:transform .25s ease;max-height:90vh;overflow:auto;-webkit-overflow-scrolling:touch}
+  .sheet.open{transform:translateX(-50%) translateY(0)}
+  .grab{width:36px;height:4px;background:var(--line);border-radius:9px;margin:6px auto 12px;position:relative;touch-action:none;cursor:grab}
+  .grab::after{content:'';position:absolute;left:-40px;right:-40px;top:-12px;bottom:-14px}
+  .sheet h3{font-size:15px;margin:0 0 14px}
+  .field{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .field:first-of-type{border-top:none}
+  .field label{width:4.2em;font-size:13px;color:var(--sub);flex:none}
+  .field input{flex:1;border:none;background:none;outline:none;color:var(--text);padding:0;min-width:0}
+  .field.col{flex-direction:column;align-items:stretch;gap:6px}
+  .field.col label{width:auto}
+  .field textarea{width:100%;min-height:130px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;
+    color:var(--text);background:var(--card);resize:vertical;line-height:1.5}
+  .colors{display:flex;flex-wrap:wrap;gap:10px}
+  .colors button{width:28px;height:28px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}
+  .colors button[aria-pressed=true]{border-color:var(--text)}
+  .pick{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;border-top:1px solid var(--line);
+    padding:13px 2px;cursor:pointer;font-family:var(--font);color:inherit;font-size:15px;text-align:left}
+  .pick:first-child{border-top:none}
+  .pick .mk{flex:none;width:18px;color:var(--accent);font-weight:700}
+  .actions{display:flex;gap:10px;margin-top:16px}
+  .btn{flex:1;border:none;border-radius:10px;padding:14px;cursor:pointer;font-size:15px;font-weight:600;font-family:var(--font)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{flex:0 0 auto;background:var(--bg);color:var(--red);padding:14px 18px}
+  .btn-sub{background:var(--bg);color:var(--text)}
+  .io{display:flex;gap:10px;margin:12px 0 8px}
+  .io .btn{padding:12px}
+
+  .ver-row{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .ver-row:first-child{border-top:none}
+  .ver-tag{flex:none;width:3.4em;font-size:11px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;padding-top:1px}
+  .ver-text{flex:1;min-width:0;font-size:13px;line-height:1.5}
+  .ver-head{font-size:15px;font-weight:700;margin:10px 0 4px}
+  .ver-head small{font-size:11px;color:var(--sub);font-weight:500;margin-left:8px}
+
+  .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 10px);transform:translateX(-50%) translateY(-16px);
+    background:#25292E;color:#fff;font-size:13px;padding:10px 18px;border-radius:99px;z-index:20;
+    box-shadow:0 4px 14px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;white-space:nowrap}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="ver" id="verLabel" aria-label="更新履歴"></button>
+    <h1>筋トレ</h1>
+  </header>
+  <div class="warn-banner" id="warnBanner" hidden></div>
+  <div class="backup-bar" id="backupBar" hidden>
+    <div class="bb-text" id="backupText"></div>
+    <button class="bb-go" id="backupGo">書き出す</button>
+    <button class="bb-later" id="backupLater" aria-label="閉じる">✕</button>
+  </div>
+
+  <main>
+    <!-- ホーム -->
+    <section id="tab-home">
+      <div class="card" id="todayCard"></div>
+      <div class="card">
+        <div class="stats">
+          <div><span>今週</span><b class="num" id="stWeek">0</b><small>回</small></div>
+          <div><span>今月</span><b class="num" id="stMonth">0</b><small>回</small></div>
+          <div><span>連続</span><b class="num" id="stStreak">0</b><small>日</small></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="nav">
+          <button id="wPrev" aria-label="前の週">‹</button>
+          <b id="wLabel" class="num"></b>
+          <button id="wNext" aria-label="次の週">›</button>
+        </div>
+        <div id="weekList"></div>
+        <p class="hint" id="weekHint" style="margin-top:10px"></p>
+      </div>
+    </section>
+
+    <!-- カレンダー -->
+    <section id="tab-cal" hidden>
+      <div class="card">
+        <div class="nav">
+          <button id="mPrev" aria-label="前の月">‹</button>
+          <b id="mLabel" class="num"></b>
+          <button id="mNext" aria-label="次の月">›</button>
+        </div>
+        <div class="cal-sum" id="calSum"></div>
+        <div class="cal-grid cal-head">
+          <span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span><span class="sun">日</span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="legend" id="calLegend"></div>
+      </div>
+    </section>
+
+    <!-- 設定 -->
+    <section id="tab-set" hidden>
+      <div class="card">
+        <div class="head-row"><p class="card-title">ルーティン（この順に回す）</p></div>
+        <div id="menuList"></div>
+        <button class="add-btn" id="addMenu">＋ メニューを追加</button>
+        <p class="hint" style="margin-top:10px">実施しなかった日は、そのメニューが翌日にずれ込みます。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">次にやるメニュー</p>
+        <button class="set-row" id="nextBtn"><span id="nextWhen">今日</span><span class="val" id="nextVal">—</span></button>
+        <p class="hint" style="margin-top:6px">順番を飛ばしたい時や、途中から始めたい時に変えます。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">バックアップ</p>
+        <div class="io">
+          <button class="btn btn-sub" id="expBtn">書き出す</button>
+          <button class="btn btn-sub" id="impBtn">読み込む</button>
+        </div>
+        <input type="file" id="impFile" accept="application/json,.json" hidden>
+        <p class="hint" id="lastBackupHint"></p>
+        <p class="hint" style="margin-top:6px">保存先はこのブラウザの中だけです。ときどき書き出して「ファイル」アプリなどに置いておくと安心です。</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="tabs" role="tablist"><div class="in">
+  <button data-tab="home" role="tab" aria-selected="true"><i>☰</i>ホーム</button>
+  <button data-tab="cal" role="tab" aria-selected="false"><i>▦</i>カレンダー</button>
+  <button data-tab="set" role="tab" aria-selected="false"><i>◎</i>設定</button>
+</div></nav>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- 日の詳細 -->
+<div class="sheet" id="daySheet" role="dialog" aria-modal="true" aria-label="日の詳細">
+  <div class="grab"></div>
+  <div class="today-date" id="dayDate"></div>
+  <div class="today-menu"><span class="dot" id="dayDot"></span><b id="dayMenu"></b></div>
+  <div class="today-sub" id="daySub"></div>
+  <ul class="ex-list" id="dayEx"></ul>
+  <button class="big-check" id="dayToggle"></button>
+</div>
+
+<!-- メニューの編集 -->
+<div class="sheet" id="menuSheet" role="dialog" aria-modal="true" aria-label="メニューの編集">
+  <div class="grab"></div>
+  <h3 id="menuTitle">メニュー</h3>
+  <div class="field"><label>名前</label><input id="mName" placeholder="例：腕と肩" maxlength="20"></div>
+  <div class="field col"><label>種目（1行に1つ）</label>
+    <textarea id="mEx" placeholder="アームカール 10回×3&#10;サイドレイズ 12回×3"></textarea></div>
+  <div class="field col"><label>色</label><div class="colors" id="mColors"></div></div>
+  <div class="actions">
+    <button class="btn btn-ghost" id="mDel">削除</button>
+    <button class="btn btn-primary" id="mSave">保存</button>
+  </div>
+</div>
+
+<!-- 次にやるメニュー -->
+<div class="sheet" id="nextSheet" role="dialog" aria-modal="true" aria-label="次にやるメニュー">
+  <div class="grab"></div>
+  <h3 id="nextTitle">次にやるメニュー</h3>
+  <div id="nextList"></div>
+</div>
+
+<!-- 確認 -->
+<div class="sheet" id="askSheet" role="dialog" aria-modal="true" aria-label="確認">
+  <div class="grab"></div>
+  <p id="askText" style="margin:4px 0 0;font-size:14px;line-height:1.7;white-space:pre-line"></p>
+  <div class="actions">
+    <button class="btn btn-sub" id="askNo">やめる</button>
+    <button class="btn btn-primary" id="askYes">実行する</button>
+  </div>
+</div>
+
+<!-- 更新履歴 -->
+<div class="sheet" id="verSheet" role="dialog" aria-modal="true" aria-label="更新履歴">
+  <div class="grab"></div>
+  <h3>更新履歴 <small id="verNow" style="font-weight:500;color:var(--sub);font-size:12px;margin-left:6px"></small></h3>
+  <div id="verList"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ============ バージョン ============ */
+const APP_VERSION='v0.1';
+/* 整数版ごとにまとめる。released が空なら「検証中」 */
+const CHANGELOG=[
+  {ver:'v1', released:'', items:[
+    ['v0.1','初版。ルーティンの登録、実施チェック、未実施の日は翌日にずれ込む、週表示・カレンダー、バックアップ']
+  ]}
+];
+
+/* ============ 定数・小道具 ============ */
+const KEY='kintore:data';
+const COLORS=['#E4572E','#1279D4','#17A673','#8E5BD6','#E9A23B','#D6458B','#2BA7B5','#6B7480'];
+const WD=['日','月','火','水','木','金','土'];
+const $=i=>document.getElementById(i);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const p2=n=>String(n).padStart(2,'0');
+const DK=d=>`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+const parseDK=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const todayKey=()=>DK(new Date());
+const mondayOf=d=>addDays(d,-((d.getDay()+6)%7));      // 週は月曜はじまり
+const md=d=>`${d.getMonth()+1}/${d.getDate()}`;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+let toastTimer=null;
+const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1900)};
+
+/* ============ 保存 ============ */
+let canSave=true;
+try{localStorage.setItem('kintore:t','1');localStorage.removeItem('kintore:t')}catch(e){canSave=false}
+/* data の形
+   menus:  [{id,name,exercises:[文字列],color}]   回す順番
+   anchor: {date:'YYYY-MM-DD', idx}               この日に menus[idx] から数え始める
+   done:   {'YYYY-MM-DD': {name?}}                実施した日。name はアンカーより前の日だけ持つ（凍結した名前）
+   missed: {'YYYY-MM-DD': {name}}                 アンカーより前の未実施日（凍結した名前）。アンカー以降は計算で出す
+   lastBackupAt */
+let data=null;
+function load(){
+  let d=null;
+  try{d=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){d=null}
+  if(!d||!Array.isArray(d.menus))d=seed();
+  if(!d.done)d.done={};
+  if(!d.missed)d.missed={};
+  if(!d.anchor)d.anchor={date:todayKey(),idx:0};
+  d.menus.forEach((m,i)=>{if(!m.id)m.id=uid();if(!Array.isArray(m.exercises))m.exercises=[];if(!m.color)m.color=COLORS[i%COLORS.length]});
+  return d;
+}
+function seed(){
+  // 初回は例のルーティンを入れておく（設定で自由に変えられる）
+  return {
+    menus:[
+      {id:uid(),name:'腕と肩',exercises:[],color:COLORS[0]},
+      {id:uid(),name:'胸と背中',exercises:[],color:COLORS[1]},
+      {id:uid(),name:'腹筋と脚',exercises:[],color:COLORS[2]}
+    ],
+    anchor:{date:todayKey(),idx:0}, done:{}, missed:{}, lastBackupAt:null
+  };
+}
+function save(){
+  if(!canSave)return;
+  try{localStorage.setItem(KEY,JSON.stringify(data))}
+  catch(e){toast('保存できませんでした')}
+}
+
+/* ============ 予定の計算（このアプリの核） ============
+   アンカーの日から1日ずつ進め、その日のメニューは menus[k % n]。
+   - 実施した日だけ k を進める → 実施しなかった日のメニューは翌日にずれ込む
+   - 今日がまだ未実施でも、明日以降は「今日やる」前提で k を進めて予定を出す
+   - アンカーより前の日は、凍結した名前（done[d].name）だけを表示する
+   返り値: {key: {state, menu, name}}
+     state: done（実施）/ missed（未実施の過去）/ today（今日・未実施）/ plan（未来の予定）
+            / past（アンカー前の実施なしの日：表示なし） */
+function schedule(fromKey,toKey){
+  const res={}, today=todayKey(), n=data.menus.length, A=data.anchor.date;
+  // アンカーより前
+  for(let d=parseDK(fromKey);DK(d)<=toKey&&DK(d)<A;d=addDays(d,1)){
+    const k=DK(d), r=data.done[k];
+    const ms=data.missed&&data.missed[k];
+    res[k]=r?{state:'done',menu:null,name:r.name||'実施',color:r.color||''}
+      :ms?{state:'missed',menu:null,name:ms.name,color:ms.color||''}:{state:'past',menu:null,name:'',color:''};
+  }
+  if(toKey<A)return res;
+  let k=data.anchor.idx;
+  for(let d=parseDK(A);;d=addDays(d,1)){
+    const key=DK(d);
+    if(key>toKey)break;
+    const m=n?data.menus[((k%n)+n)%n]:null;
+    let state;
+    if(key<today){state=data.done[key]?'done':'missed';if(data.done[key])k++}
+    else if(key===today){state=data.done[key]?'done':'today';k++}
+    else{state='plan';k++}
+    if(key>=fromKey)res[key]={state,menu:m,name:m?m.name:''};
+  }
+  return res;
+}
+/* 「次にやるメニュー」：今日が未実施なら今日、実施済みなら明日 */
+function nextPoint(){
+  const today=todayKey();
+  const date=data.done[today]?DK(addDays(new Date(),1)):today;
+  const n=data.menus.length;
+  if(!n)return {date,idx:0,menu:null};
+  // date のメニュー位置を求める（date は今日か明日なのでアンカー以降）
+  let k=data.anchor.idx;
+  for(let d=parseDK(data.anchor.date);DK(d)<date;d=addDays(d,1)){
+    const key=DK(d);
+    if(key<today){if(data.done[key])k++}
+    else k++;                      // 今日（実施済み）
+  }
+  const idx=((k%n)+n)%n;
+  return {date,idx,menu:data.menus[idx]};
+}
+/* アンカーを付け直す。メニューを変えた時・次のメニューを選んだ時に使う。
+   付け直すとアンカーより前の日は計算し直せなくなるので、先にその日のメニュー名を凍結しておく。
+   ※メニューを変更する「前」に凍結すること（変更後だと、新しい並びの名前で凍結してしまう） */
+function freezePast(){
+  const np=nextPoint(), A=data.anchor.date;
+  const endKey=DK(addDays(parseDK(np.date),-1));
+  if(endKey<A)return np;
+  const s=schedule(A,endKey);
+  if(!data.missed)data.missed={};
+  for(const [k,v] of Object.entries(s)){
+    const color=v.menu?v.menu.color:'';
+    if(v.state==='done'&&data.done[k]&&!data.done[k].name){data.done[k].name=v.name;data.done[k].color=color}
+    if(v.state==='missed')data.missed[k]={name:v.name,color};
+  }
+  return np;
+}
+function rebase(newIdx){
+  const np=freezePast();
+  data.anchor={date:np.date,idx:newIdx};
+}
+function setDone(key,on){
+  if(on)data.done[key]={};
+  else delete data.done[key];
+  save();
+}
+const canToggle=key=>key<=todayKey()&&key>=data.anchor.date&&data.menus.length>0;
+
+/* ============ シート ============ */
+const open=el=>{
+  document.querySelectorAll('.sheet').forEach(s=>{if(s!==el)s.classList.remove('open')});
+  el.classList.add('open');$('scrim').classList.add('open');
+};
+const closeAll=()=>{
+  document.querySelectorAll('.sheet').forEach(s=>{s.classList.remove('open');s.style.transform=''});
+  $('scrim').classList.remove('open');
+  if(askResolve)askClose(false);
+};
+$('scrim').onclick=closeAll;
+/* 確認ダイアログ（OSのconfirmは使わない） */
+let askResolve=null;
+function ask(text,okLabel){
+  return new Promise(res=>{
+    if(askResolve){const r=askResolve;askResolve=null;r(false)}
+    askResolve=res;
+    $('askText').textContent=text;
+    $('askYes').textContent=okLabel||'実行する';
+    open($('askSheet'));
+  });
+}
+function askClose(v){
+  const r=askResolve;askResolve=null;
+  $('askSheet').classList.remove('open');$('scrim').classList.remove('open');
+  if(r)r(v);
+}
+$('askYes').onclick=()=>askClose(true);
+$('askNo').onclick=()=>askClose(false);
+/* つまみを下にスワイプして閉じる */
+(function enableSheetSwipe(){
+  let sheet=null,startY=0,dy=0;
+  const pointY=ev=>ev.touches&&ev.touches[0]?ev.touches[0].clientY:ev.clientY;
+  function begin(ev){
+    const g=ev.target.closest&&ev.target.closest('.grab');if(!g)return;
+    sheet=g.closest('.sheet');if(!sheet)return;
+    startY=pointY(ev);dy=0;sheet.style.transition='none';ev.preventDefault();
+  }
+  function move(ev){
+    if(!sheet)return;
+    dy=Math.max(0,pointY(ev)-startY);
+    sheet.style.transform=`translateX(-50%) translateY(${dy}px)`;ev.preventDefault();
+  }
+  function end(){
+    if(!sheet)return;
+    const el=sheet;sheet=null;el.style.transition='';
+    if(dy>90){
+      el.style.transform='translateX(-50%) translateY(100%)';
+      $('scrim').classList.remove('open');
+      if(el.id==='askSheet'&&askResolve){const r=askResolve;askResolve=null;r(false)}
+      setTimeout(()=>{el.classList.remove('open');el.style.transform=''},250);
+    }else el.style.transform='';
+  }
+  document.addEventListener('touchstart',begin,{passive:false});
+  document.addEventListener('touchmove',move,{passive:false});
+  document.addEventListener('touchend',end);
+  document.addEventListener('touchcancel',end);
+  document.addEventListener('mousedown',begin);
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',end);
+})();
+
+/* ============ 表示 ============ */
+let tab='home';
+let weekStart=mondayOf(new Date());
+let calMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+
+function render(){
+  renderToday();renderStats();renderWeek();renderCal();renderSettings();updateBackupBar();
+}
+const dateLabel=d=>`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`;
+
+function exListHTML(m){
+  return m&&m.exercises.length?m.exercises.map(x=>`<li>${esc(x)}</li>`).join(''):'';
+}
+function renderToday(){
+  const el=$('todayCard'), now=new Date(), key=DK(now);
+  if(!data.menus.length){
+    el.innerHTML=`<div class="today-date">${dateLabel(now)}</div>
+      <div class="today-menu"><b>メニューがありません</b></div>
+      <div class="today-sub">設定タブでルーティンを登録してください。</div>
+      <button class="big-check" id="goSet">ルーティンを登録する</button>`;
+    $('goSet').onclick=()=>showTab('set');
+    return;
+  }
+  const s=schedule(key,DK(addDays(now,1)));
+  const t=s[key], tm=s[DK(addDays(now,1))];
+  const done=t.state==='done';
+  const m=t.menu;
+  el.innerHTML=`<div class="today-date">今日 ${dateLabel(now)}</div>
+    <div class="today-menu"><span class="dot" style="background:${m?m.color:'#ccc'}"></span><b>${esc(t.name)}</b></div>
+    <div class="today-sub">${done?'おつかれさまでした。':''}明日は ${esc(tm?tm.name:'')}${done?'':'（今日やった場合）'}</div>
+    ${m&&m.exercises.length?`<ul class="ex-list">${exListHTML(m)}</ul>`:''}
+    <button class="big-check${done?' done':''}" id="todayToggle">${done?(canToggle(key)?'✓ 実施済み（タップで取り消す）':'✓ 実施済み'):'実施した'}</button>`;
+  $('todayToggle').onclick=()=>toggleDay(key);
+}
+function renderStats(){
+  const now=new Date(), today=DK(now);
+  const ws=DK(mondayOf(now)), we=DK(addDays(mondayOf(now),6));
+  const ms=DK(new Date(now.getFullYear(),now.getMonth(),1)), me=DK(new Date(now.getFullYear(),now.getMonth()+1,0));
+  let w=0,m=0;
+  for(const k of Object.keys(data.done)){
+    if(k>=ws&&k<=we)w++;
+    if(k>=ms&&k<=me)m++;
+  }
+  // 連続：今日が未実施なら昨日から数える（今日はまだこれからなので途切れ扱いにしない）
+  let d=data.done[today]?now:addDays(now,-1), st=0;
+  while(data.done[DK(d)]){st++;d=addDays(d,-1)}
+  $('stWeek').textContent=w;$('stMonth').textContent=m;$('stStreak').textContent=st;
+}
+function renderWeek(){
+  const from=DK(weekStart), to=DK(addDays(weekStart,6)), today=todayKey();
+  $('wLabel').textContent=`${md(weekStart)}〜${md(addDays(weekStart,6))}`;
+  const s=schedule(from,to);
+  let html='';
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i), key=DK(d), r=s[key];
+    const cls=d.getDay()===0?'sun':d.getDay()===6?'sat':'';
+    const tag=r.state==='missed'?'<span class="tag missed">未実施</span>'
+      :r.state==='today'?'<span class="tag today">今日</span>'
+      :r.state==='plan'?'<span class="tag plan">予定</span>':'';
+    const col=r.menu?r.menu.color:(r.color||'#C7CDD4');
+    const dot=r.name?`<span class="dot" style="background:${col}${r.state==='missed'?';opacity:.35':''}"></span>`:'';
+    const nm=r.name||(r.state==='past'?'—':'');
+    html+=`<div class="wrow${key===today?' is-today':''}">
+      <div class="wday ${cls}"><b>${d.getDate()}</b>${WD[d.getDay()]}曜</div>
+      <button class="wbody ${r.state}" data-day="${key}">${dot}<span class="nm">${esc(nm)}</span>${tag}</button>
+      <button class="chk${r.state==='done'?' on':''}" data-chk="${key}" aria-label="${md(d)}を実施済みにする"
+        ${canToggle(key)?'':'disabled'}>✓</button>
+    </div>`;
+  }
+  $('weekList').innerHTML=html;
+  $('weekHint').textContent=from<data.anchor.date
+    ?'使い始めた日・ルーティンを変えた日より前は、記録の表示だけになります（チェックは変えられません）。':'';
+}
+$('weekList').onclick=e=>{
+  const c=e.target.closest('[data-chk]');
+  if(c){toggleDay(c.dataset.chk);return}
+  const b=e.target.closest('[data-day]');
+  if(b)openDay(b.dataset.day);
+};
+$('wPrev').onclick=()=>{weekStart=addDays(weekStart,-7);renderWeek()};
+$('wNext').onclick=()=>{weekStart=addDays(weekStart,7);renderWeek()};
+
+function renderCal(){
+  const y=calMonth.getFullYear(), mo=calMonth.getMonth();
+  $('mLabel').textContent=`${y}年${mo+1}月`;
+  const first=new Date(y,mo,1), last=new Date(y,mo+1,0), today=todayKey();
+  const s=schedule(DK(first),DK(last));
+  const lead=(first.getDay()+6)%7;
+  let html='', ok=0, ng=0;
+  for(let i=0;i<lead;i++)html+='<div class="cal-cell empty"></div>';
+  for(let day=1;day<=last.getDate();day++){
+    const d=new Date(y,mo,day), key=DK(d), r=s[key];
+    const cls=['cal-cell',d.getDay()===0?'sun':d.getDay()===6?'sat':'',key===today?'today':''].join(' ');
+    if(r.state==='done')ok++;
+    if(r.state==='missed')ng++;
+    let nm='';
+    if(r.name){
+      const bg=r.menu?r.menu.color:(r.color||'#9AA1A9');
+      nm=`<span class="cal-nm ${r.state==='missed'?'missed':r.state==='plan'?'plan':''}" style="background:${bg}">${esc((r.name||'').slice(0,4))}</span>`;
+    }
+    const mark=r.state==='done'?'<span class="cal-mark ok">✓</span>':r.state==='missed'?'<span class="cal-mark ng">×</span>':'<span class="cal-mark"></span>';
+    html+=`<button class="${cls}" data-day="${key}"><span class="cal-d">${day}</span>${nm}${mark}</button>`;
+  }
+  $('calGrid').innerHTML=html;
+  $('calSum').innerHTML=`実施 <b class="ok">${ok}</b> 日　未実施 <b class="ng">${ng}</b> 日`;
+  $('calLegend').innerHTML=data.menus.map(m=>`<span><i class="dot" style="background:${m.color}"></i>${esc(m.name)}</span>`).join('');
+}
+$('calGrid').onclick=e=>{const b=e.target.closest('[data-day]');if(b)openDay(b.dataset.day)};
+$('mPrev').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1);renderCal()};
+$('mNext').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1);renderCal()};
+
+/* ---- 日の詳細 ---- */
+let dayKey=null;
+function openDay(key){dayKey=key;fillDay();open($('daySheet'))}
+function fillDay(){
+  const key=dayKey, d=parseDK(key), r=schedule(key,key)[key];
+  $('dayDate').textContent=(key===todayKey()?'今日 ':'')+dateLabel(d);
+  $('dayDot').style.background=r.menu?r.menu.color:(r.color||'#C7CDD4');
+  $('dayMenu').textContent=r.name||'記録なし';
+  $('daySub').textContent={done:'実施済み',missed:'未実施（このメニューは翌日にずれ込みました）',
+    today:'今日のメニュー',plan:'予定（それまで毎日実施した場合）',past:''}[r.state];
+  $('dayEx').innerHTML=exListHTML(r.menu);
+  const t=$('dayToggle');
+  if(canToggle(key)){
+    t.hidden=false;t.className='big-check'+(r.state==='done'?' done':'');
+    t.textContent=r.state==='done'?'✓ 実施済み（タップで取り消す）':'実施した';
+  }else t.hidden=true;
+}
+$('dayToggle').onclick=async()=>{const k=dayKey;await toggleDay(k);if(dayKey===k&&$('daySheet').classList.contains('open'))fillDay()};
+
+/* 実施チェックの切り替え。過去の日を変えると、それ以降の予定が組み直される */
+async function toggleDay(key){
+  if(!canToggle(key))return;
+  const on=!data.done[key], today=todayKey();
+  if(key<today){
+    const msg=on
+      ?`${md(parseDK(key))} を実施済みにします。\nそれ以降のメニューが組み直されます。`
+      :`${md(parseDK(key))} の実施を取り消します。\nこの日のメニューが翌日にずれ込み、それ以降も組み直されます。`;
+    const wasDay=$('daySheet').classList.contains('open');
+    const ok=await ask(msg,on?'実施済みにする':'取り消す');
+    if(!ok){if(wasDay)open($('daySheet'));return}
+    setDone(key,on);render();
+    if(wasDay){fillDay();open($('daySheet'))}
+    toast('予定を組み直しました');
+    return;
+  }
+  setDone(key,on);render();
+  if(on)toast('おつかれさまでした');
+}
+
+/* ---- 設定 ---- */
+function renderSettings(){
+  const ms=data.menus;
+  $('menuList').innerHTML=ms.length?ms.map((m,i)=>`<div class="mrow">
+      <span class="no">${i+1}</span>
+      <button class="mn" data-edit="${m.id}"><span class="dot" style="background:${m.color}"></span><span>${esc(m.name)}</span>
+        ${m.exercises.length?`<small>${m.exercises.length}種目</small>`:''}</button>
+      <button class="mv" data-up="${i}" ${i===0?'disabled':''} aria-label="上へ">▲</button>
+      <button class="mv" data-down="${i}" ${i===ms.length-1?'disabled':''} aria-label="下へ">▼</button>
+    </div>`).join(''):'<p class="hint">まだありません。</p>';
+  const np=nextPoint();
+  $('nextWhen').textContent=np.date===todayKey()?'今日':'明日';
+  $('nextVal').innerHTML=np.menu?`<span class="dot" style="background:${np.menu.color}"></span>${esc(np.menu.name)}`:'—';
+  const lb=$('lastBackupHint');
+  if(data.lastBackupAt){
+    const d=new Date(data.lastBackupAt), days=Math.floor((Date.now()-d.getTime())/86400000);
+    lb.textContent=`最後のバックアップ：${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}（${days===0?'今日':days+'日前'}）`;
+  }else lb.textContent='最後のバックアップ：まだありません';
+}
+/* メニューの並びや中身を変える時は、いま次にやるメニューを保ったままアンカーを付け直す */
+function changeMenus(fn){
+  const np=freezePast();            // 変更前の並びで過去を凍結
+  const keepId=np.menu?np.menu.id:null, keepIdx=np.idx;
+  fn();
+  let idx=data.menus.findIndex(m=>m.id===keepId);
+  if(idx<0)idx=data.menus.length?Math.min(keepIdx,data.menus.length-1):0;
+  data.anchor={date:np.date,idx};
+  save();render();
+}
+$('menuList').onclick=e=>{
+  const up=e.target.closest('[data-up]'), dn=e.target.closest('[data-down]'), ed=e.target.closest('[data-edit]');
+  if(up||dn){
+    const i=+(up?up.dataset.up:dn.dataset.down), j=up?i-1:i+1;
+    changeMenus(()=>{const a=data.menus;[a[i],a[j]]=[a[j],a[i]]});
+    return;
+  }
+  if(ed)openMenu(ed.dataset.edit);
+};
+let editId=null, editColor=COLORS[0];
+function openMenu(id){
+  editId=id;
+  const m=id?data.menus.find(x=>x.id===id):null;
+  $('menuTitle').textContent=m?'メニューを編集':'メニューを追加';
+  $('mName').value=m?m.name:'';
+  $('mEx').value=m?m.exercises.join('\n'):'';
+  const used=new Set(data.menus.map(x=>x.color));
+  editColor=m?m.color:(COLORS.find(c=>!used.has(c))||COLORS[data.menus.length%COLORS.length]);
+  drawColors();
+  $('mDel').hidden=!m;
+  open($('menuSheet'));
+}
+function drawColors(){
+  $('mColors').innerHTML=COLORS.map(c=>`<button style="background:${c}" data-c="${c}" aria-pressed="${c===editColor}" aria-label="色"></button>`).join('');
+}
+$('mColors').onclick=e=>{const b=e.target.closest('[data-c]');if(b){editColor=b.dataset.c;drawColors()}};
+$('addMenu').onclick=()=>openMenu(null);
+$('mSave').onclick=()=>{
+  const name=$('mName').value.trim();
+  if(!name){toast('名前を入れてください');return}
+  const ex=$('mEx').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const id=editId;
+  changeMenus(()=>{
+    if(id){const m=data.menus.find(x=>x.id===id);if(m){m.name=name;m.exercises=ex;m.color=editColor}}
+    else data.menus.push({id:uid(),name,exercises:ex,color:editColor});
+  });
+  closeAll();toast('保存しました');
+};
+$('mDel').onclick=async()=>{
+  const id=editId, m=data.menus.find(x=>x.id===id);if(!m)return;
+  const ok=await ask(`「${m.name}」をルーティンから削除します。\nこれまでの実施記録は残ります。`,'削除する');
+  if(!ok){open($('menuSheet'));return}
+  changeMenus(()=>{data.menus=data.menus.filter(x=>x.id!==id)});
+  toast('削除しました');
+};
+$('nextBtn').onclick=()=>{
+  if(!data.menus.length){toast('先にメニューを登録してください');return}
+  const np=nextPoint();
+  $('nextTitle').textContent=(np.date===todayKey()?'今日':'明日')+'やるメニュー';
+  $('nextList').innerHTML=data.menus.map((m,i)=>`<button class="pick" data-pick="${i}">
+    <span class="mk">${i===np.idx?'✓':''}</span><span class="dot" style="background:${m.color}"></span>${esc(m.name)}</button>`).join('');
+  open($('nextSheet'));
+};
+$('nextList').onclick=e=>{
+  const b=e.target.closest('[data-pick]');if(!b)return;
+  rebase(+b.dataset.pick);save();render();closeAll();toast('予定を組み直しました');
+};
+
+/* ---- バックアップ ---- */
+async function exportFile(name,obj){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  try{
+    const f=new File([blob],name,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return true}
+  }catch(e){if(e&&e.name==='AbortError')return false}
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),1500);
+  return true;
+}
+async function doExport(){
+  const obj={app:'kintore',format:1,exportedAt:new Date().toISOString(),
+    menus:data.menus,anchor:data.anchor,done:data.done,missed:data.missed};
+  if(await exportFile('kintore.json',obj)){
+    data.lastBackupAt=new Date().toISOString();save();render();toast('書き出しました');
+  }
+}
+$('expBtn').onclick=doExport;
+$('backupGo').onclick=doExport;
+$('impBtn').onclick=()=>{$('impFile').value='';$('impFile').click()};
+$('impFile').onchange=async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  let obj=null;
+  try{obj=JSON.parse(await f.text())}catch(err){obj=null}
+  if(!obj||obj.app!=='kintore'||!Array.isArray(obj.menus)){toast('このアプリのファイルではありません');return}
+  const ok=await ask(`${f.name} を読み込みます。\nいまのルーティンと記録は、ファイルの内容に置き換わります。`,'読み込む');
+  if(!ok)return;
+  data.menus=obj.menus;data.anchor=obj.anchor||{date:todayKey(),idx:0};data.done=obj.done||{};data.missed=obj.missed||{};
+  data=normalize(data);save();render();toast('読み込みました');
+};
+function normalize(d){
+  d.menus.forEach((m,i)=>{if(!m.id)m.id=uid();if(!Array.isArray(m.exercises))m.exercises=[];if(!m.color)m.color=COLORS[i%COLORS.length]});
+  if(!d.done)d.done={};
+  if(!d.missed)d.missed={};
+  if(!d.anchor||!d.anchor.date)d.anchor={date:todayKey(),idx:0};
+  return d;
+}
+let backupDismissed=false;
+function updateBackupBar(){
+  const bar=$('backupBar');
+  const has=Object.keys(data.done).length>0;
+  const last=data.lastBackupAt?new Date(data.lastBackupAt).getTime():0;
+  const days=last?Math.floor((Date.now()-last)/86400000):null;
+  const show=has&&!backupDismissed&&(days===null||days>=14);
+  bar.hidden=!show;
+  if(show)$('backupText').textContent=days===null?'まだバックアップがありません。書き出しておくと安心です。':`前回のバックアップから${days}日たちました。`;
+}
+$('backupLater').onclick=()=>{backupDismissed=true;updateBackupBar()};
+
+/* ---- 更新履歴 ---- */
+function renderChangelog(){
+  $('verNow').textContent='いま '+APP_VERSION;
+  $('verList').innerHTML=CHANGELOG.filter(g=>g.items&&g.items.length).map(g=>{
+    const when=g.released?(()=>{const d=parseDK(g.released);return `${d.getMonth()+1}/${d.getDate()} 導入`})():'検証中';
+    return `<div class="ver-head">${esc(g.ver)}<small>${when}</small></div>`+
+      g.items.map(([v,t])=>`<div class="ver-row"><span class="ver-tag">${esc(v)}</span><span class="ver-text">${esc(t)}</span></div>`).join('');
+  }).join('');
+}
+$('verLabel').onclick=()=>{renderChangelog();open($('verSheet'))};
+
+/* ---- タブ ---- */
+function showTab(t){
+  tab=t;
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===t)));
+  ['home','cal','set'].forEach(x=>{$('tab-'+x).hidden=x!==t});
+  render();
+  scrollTo(0,0);
+}
+document.querySelector('.tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab)};
+
+/* 日付が変わってから戻ってきた時も、今日の表示を正しくする */
+let lastSeenDay=todayKey();
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  const t=todayKey();
+  if(t!==lastSeenDay){lastSeenDay=t;weekStart=mondayOf(new Date())}
+  render();
+});
+
+/* ============ Service Worker（オフライン起動） ============ */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloaded)return;reloaded=true;
+    try{localStorage.setItem('kintore:justUpdated','1')}catch(e){}
+    location.reload();
+  });
+  addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+
+/* ============ 起動 ============ */
+(function boot(){
+  $('verLabel').textContent=APP_VERSION;
+  if(!canSave){
+    const w=$('warnBanner');w.hidden=false;
+    w.textContent='このブラウザではデータを保存できません（プライベートブラウズ等）。';
+  }
+  data=load();
+  save();
+  render();
+  try{
+    const prev=localStorage.getItem('kintore:lastVersion');
+    const flagged=localStorage.getItem('kintore:justUpdated');
+    localStorage.removeItem('kintore:justUpdated');
+    localStorage.setItem('kintore:lastVersion',APP_VERSION);
+    if((prev&&prev!==APP_VERSION)||(flagged&&!prev))setTimeout(()=>toast(`${APP_VERSION} に更新しました`),500);
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
