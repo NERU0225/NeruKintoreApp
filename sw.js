@@ -9,7 +9,7 @@
    全部消すと家計簿のキャッシュまで消え、家計簿が機内モードで開けなくなる。
 */
 const PREFIX = 'kintore-';
-const CACHE = PREFIX + 'v0.1';
+const CACHE = PREFIX + 'v0.2';
 const REVALIDATE_TIMEOUT = 3000;
 const ASSETS = [
   './',

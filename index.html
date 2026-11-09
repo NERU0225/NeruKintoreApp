@@ -189,6 +189,32 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  /* v0.2 追加 */
+  .sheet-tall{max-height:88vh}
+  .pblock{padding:10px 0;border-top:1px solid var(--line)}
+  .pblock:first-child{border-top:none}
+  .prow{display:flex;align-items:center;gap:10px}
+  .prow b{font-size:16px;font-weight:600}
+  .prow .cnt{margin-left:auto;font-size:11px;color:var(--sub)}
+  .ex-sub{list-style:none;margin:4px 0 0 44px;padding:0}
+  .ex-sub li{font-size:13px;color:#4A5058;padding:2px 0}
+  .chk.sm{width:30px;height:30px;font-size:15px}
+  .chk.half{border-color:var(--green);color:var(--green);background:#E8F6F0;font-size:10px;font-weight:700}
+  .chk.ng{border-color:#F2B8AE;color:var(--red);background:#FDECEA}
+  .done-banner{background:#E8F6F0;color:var(--green);font-weight:700;text-align:center;border-radius:12px;padding:14px;margin-top:12px}
+  .all-btn{width:100%;margin-top:12px}
+  .dots{display:inline-flex;gap:4px;flex:none}
+  .sec-title{font-size:12px;font-weight:600;color:var(--sub);margin:16px 0 4px}
+  .tag.part{color:#8A6D1F;background:#FFF6E5}
+  .cal-daily{width:6px;height:6px;border-radius:50%;margin-top:1px}
+  .cal-daily.ok{background:var(--green)}
+  .cal-daily.ng{border:1.5px solid #C7CDD4}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chips button{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);border-radius:99px;
+    padding:8px 14px;font-size:15px;cursor:pointer;font-family:var(--font);color:var(--text)}
+  .chips button[aria-pressed=true]{border-color:var(--accent);background:#FFF4F0;font-weight:600}
+  .chips .ord{font-size:11px;color:var(--accent);font-weight:700;min-width:1em}
+  .muted{color:var(--sub)}
 </style>
 </head>
 <body>
@@ -208,6 +234,7 @@
     <!-- ホーム -->
     <section id="tab-home">
       <div class="card" id="todayCard"></div>
+      <div class="card" id="dailyCard" hidden></div>
       <div class="card">
         <div class="stats">
           <div><span>今週</span><b class="num" id="stWeek">0</b><small>回</small></div>
@@ -246,10 +273,22 @@
     <!-- 設定 -->
     <section id="tab-set" hidden>
       <div class="card">
-        <div class="head-row"><p class="card-title">ルーティン（この順に回す）</p></div>
+        <p class="card-title">部位</p>
+        <div id="partList"></div>
+        <button class="add-btn" id="addPart">＋ 部位を追加</button>
+        <p class="hint" style="margin-top:10px">種目（アームカール 10回×3 など）は部位ごとに登録します。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">ルーティン（この順に回す）</p>
         <div id="menuList"></div>
-        <button class="add-btn" id="addMenu">＋ メニューを追加</button>
-        <p class="hint" style="margin-top:10px">実施しなかった日は、そのメニューが翌日にずれ込みます。</p>
+        <button class="add-btn" id="addMenu">＋ 日を追加</button>
+        <p class="hint" style="margin-top:10px">1日ごとに、やる部位の組み合わせを選びます。部位がすべてチェックされない日は、その組み合わせが翌日にずれ込みます。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">毎日やること</p>
+        <div id="dailyList"></div>
+        <button class="add-btn" id="addDaily">＋ 毎日の項目を追加</button>
+        <p class="hint" style="margin-top:10px">ストレッチなど。やらなかった日があってもルーティンはずれません。</p>
       </div>
       <div class="card">
         <p class="card-title">次にやるメニュー</p>
@@ -279,23 +318,34 @@
 <div class="scrim" id="scrim"></div>
 
 <!-- 日の詳細 -->
-<div class="sheet" id="daySheet" role="dialog" aria-modal="true" aria-label="日の詳細">
+<div class="sheet sheet-tall" id="daySheet" role="dialog" aria-modal="true" aria-label="日の詳細">
   <div class="grab"></div>
   <div class="today-date" id="dayDate"></div>
-  <div class="today-menu"><span class="dot" id="dayDot"></span><b id="dayMenu"></b></div>
+  <div class="today-menu"><span class="dots" id="dayDots"></span><b id="dayMenu"></b></div>
   <div class="today-sub" id="daySub"></div>
-  <ul class="ex-list" id="dayEx"></ul>
-  <button class="big-check" id="dayToggle"></button>
+  <div id="dayBody"></div>
 </div>
 
-<!-- メニューの編集 -->
-<div class="sheet" id="menuSheet" role="dialog" aria-modal="true" aria-label="メニューの編集">
+<!-- 部位・毎日の項目の編集 -->
+<div class="sheet" id="itemSheet" role="dialog" aria-modal="true" aria-label="編集">
   <div class="grab"></div>
-  <h3 id="menuTitle">メニュー</h3>
-  <div class="field"><label>名前</label><input id="mName" placeholder="例：腕と肩" maxlength="20"></div>
-  <div class="field col"><label>種目（1行に1つ）</label>
-    <textarea id="mEx" placeholder="アームカール 10回×3&#10;サイドレイズ 12回×3"></textarea></div>
-  <div class="field col"><label>色</label><div class="colors" id="mColors"></div></div>
+  <h3 id="itemTitle">部位</h3>
+  <div class="field"><label>名前</label><input id="iName" placeholder="例：腕" maxlength="20"></div>
+  <div class="field col"><label>種目（1行に1つ・なくてもよい）</label>
+    <textarea id="iEx" placeholder="アームカール 10回×3&#10;フレンチプレス 12回×3"></textarea></div>
+  <div class="field col" id="iColorField"><label>色</label><div class="colors" id="iColors"></div></div>
+  <div class="actions">
+    <button class="btn btn-ghost" id="iDel">削除</button>
+    <button class="btn btn-primary" id="iSave">保存</button>
+  </div>
+</div>
+
+<!-- ルーティンの日の編集（部位の組み合わせ） -->
+<div class="sheet" id="menuSheet" role="dialog" aria-modal="true" aria-label="組み合わせ">
+  <div class="grab"></div>
+  <h3 id="menuTitle">組み合わせ</h3>
+  <p class="hint" style="margin-bottom:12px">この日にやる部位を選んでください（選んだ順に並びます）。</p>
+  <div class="chips" id="mChips"></div>
   <div class="actions">
     <button class="btn btn-ghost" id="mDel">削除</button>
     <button class="btn btn-primary" id="mSave">保存</button>
@@ -320,7 +370,7 @@
 </div>
 
 <!-- 更新履歴 -->
-<div class="sheet" id="verSheet" role="dialog" aria-modal="true" aria-label="更新履歴">
+<div class="sheet sheet-tall" id="verSheet" role="dialog" aria-modal="true" aria-label="更新履歴">
   <div class="grab"></div>
   <h3>更新履歴 <small id="verNow" style="font-weight:500;color:var(--sub);font-size:12px;margin-left:6px"></small></h3>
   <div id="verList"></div>
@@ -331,16 +381,18 @@
 <script>
 'use strict';
 /* ============ バージョン ============ */
-const APP_VERSION='v0.1';
+const APP_VERSION='v0.2';
 /* 整数版ごとにまとめる。released が空なら「検証中」 */
 const CHANGELOG=[
   {ver:'v1', released:'', items:[
+    ['v0.2','部位を1つずつ登録し、日ごとに組み合わせを選べるように。チェックは部位ごと。毎日やる項目（ストレッチなど）を追加'],
     ['v0.1','初版。ルーティンの登録、実施チェック、未実施の日は翌日にずれ込む、週表示・カレンダー、バックアップ']
   ]}
 ];
 
 /* ============ 定数・小道具 ============ */
 const KEY='kintore:data';
+const FORMAT=2;
 const COLORS=['#E4572E','#1279D4','#17A673','#8E5BD6','#E9A23B','#D6458B','#2BA7B5','#6B7480'];
 const WD=['日','月','火','水','木','金','土'];
 const $=i=>document.getElementById(i);
@@ -357,59 +409,115 @@ let toastTimer=null;
 const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1900)};
 
-/* ============ 保存 ============ */
-let canSave=true;
-try{localStorage.setItem('kintore:t','1');localStorage.removeItem('kintore:t')}catch(e){canSave=false}
-/* data の形
-   menus:  [{id,name,exercises:[文字列],color}]   回す順番
-   anchor: {date:'YYYY-MM-DD', idx}               この日に menus[idx] から数え始める
-   done:   {'YYYY-MM-DD': {name?}}                実施した日。name はアンカーより前の日だけ持つ（凍結した名前）
-   missed: {'YYYY-MM-DD': {name}}                 アンカーより前の未実施日（凍結した名前）。アンカー以降は計算で出す
+/* ============ データ ============
+   parts:  [{id,name,color,exercises:[文字列]}]       部位
+   menus:  [{id,partIds:[部位id]}]                    ルーティンの1日ぶん（回す順番）。名前は部位名をつなげて出す
+   daily:  [{id,name,exercises,since}]                毎日やること。since 以降の日だけ対象
+   anchor: {date,idx}                                 この日に menus[idx] から数え始める
+   checks: {'YYYY-MM-DD':[部位id]}                    チェックした部位。その日の組み合わせが全部入っていれば実施
+   dailyChecks: {'YYYY-MM-DD':[毎日の項目id]}
+   hist:   {'YYYY-MM-DD':{state,name,color,parts:[{name,color,done}]}}
+           アンカーより前の日の凍結した記録（計算し直せないため）
    lastBackupAt */
 let data=null;
+let canSave=true;
+try{localStorage.setItem('kintore:t','1');localStorage.removeItem('kintore:t')}catch(e){canSave=false}
+
+function seed(){
+  const P=['腕','肩','胸','背中','腹筋','脚'].map((name,i)=>({id:uid(),name,color:COLORS[i],exercises:[]}));
+  return {format:FORMAT,parts:P,
+    menus:[{id:uid(),partIds:[P[0].id,P[1].id]},{id:uid(),partIds:[P[2].id,P[3].id]},{id:uid(),partIds:[P[4].id,P[5].id]}],
+    daily:[{id:uid(),name:'ストレッチ',exercises:[],since:todayKey()}],
+    anchor:{date:todayKey(),idx:0},checks:{},dailyChecks:{},hist:{},lastBackupAt:null};
+}
+/* v0.1 のデータ（メニューが「腕と肩」のような名前で1つ）を v0.2 の形に移す。
+   名前を「と・、＋」で分けて部位にし、これまでの実施・未実施は名前つきで凍結する */
+function migrateV1(d){
+  const today=todayKey(), parts=[], byName={};
+  const getPart=nm=>{
+    if(!byName[nm]){byName[nm]={id:uid(),name:nm,color:COLORS[parts.length%COLORS.length],exercises:[]};parts.push(byName[nm])}
+    return byName[nm];
+  };
+  const old=d.menus||[];
+  const menus=old.map(m=>{
+    const names=String(m.name||'').split(/と|・|、|,|，|＋|\+|\//).map(s=>s.trim()).filter(Boolean);
+    const ps=(names.length?names:[m.name||'メニュー']).map(getPart);
+    if(Array.isArray(m.exercises))m.exercises.forEach(x=>{if(!ps[0].exercises.includes(x))ps[0].exercises.push(x)});
+    return {id:m.id||uid(),partIds:ps.map(p=>p.id),_name:m.name,_color:m.color};
+  });
+  const hist={}, done=d.done||{}, missed=d.missed||{};
+  for(const [k,v] of Object.entries(missed))hist[k]={state:'missed',name:v.name||'',color:v.color||'',parts:[]};
+  for(const [k,v] of Object.entries(done))if(v&&v.name)hist[k]={state:'done',name:v.name,color:v.color||'',parts:[]};
+  const A=d.anchor&&d.anchor.date?d.anchor.date:today, n=menus.length;
+  let k=d.anchor&&Number.isFinite(d.anchor.idx)?d.anchor.idx:0;
+  const checks={};
+  if(n){
+    for(let dt=parseDK(A);DK(dt)<today;dt=addDays(dt,1)){
+      const key=DK(dt), m=menus[((k%n)+n)%n];
+      if(done[key]){hist[key]={state:'done',name:m._name,color:m._color||'',parts:[]};k++}
+      else hist[key]={state:'missed',name:m._name,color:m._color||'',parts:[]};
+    }
+    if(done[today]&&A<=today)checks[today]=menus[((k%n)+n)%n].partIds.slice();
+  }
+  menus.forEach(m=>{delete m._name;delete m._color});
+  return {format:FORMAT,parts,menus,daily:[],anchor:{date:A<=today?today:A,idx:n?((k%n)+n)%n:0},
+    checks,dailyChecks:{},hist,lastBackupAt:d.lastBackupAt||null};
+}
+function normalize(d){
+  if(!d||typeof d!=='object')return seed();
+  if(!Array.isArray(d.parts)){
+    if(Array.isArray(d.menus))d=migrateV1(d);
+    else return seed();
+  }
+  d.format=FORMAT;
+  d.parts.forEach((p,i)=>{if(!p.id)p.id=uid();if(!Array.isArray(p.exercises))p.exercises=[];if(!p.color)p.color=COLORS[i%COLORS.length]});
+  const ids=new Set(d.parts.map(p=>p.id));
+  d.menus=(d.menus||[]).map(m=>({id:m.id||uid(),partIds:(m.partIds||[]).filter(x=>ids.has(x))})).filter(m=>m.partIds.length);
+  d.daily=(d.daily||[]).map(x=>({id:x.id||uid(),name:x.name||'',exercises:Array.isArray(x.exercises)?x.exercises:[],since:x.since||todayKey()}));
+  if(!d.anchor||!d.anchor.date)d.anchor={date:todayKey(),idx:0};
+  if(!d.checks)d.checks={};
+  if(!d.dailyChecks)d.dailyChecks={};
+  if(!d.hist)d.hist={};
+  return d;
+}
 function load(){
   let d=null;
   try{d=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){d=null}
-  if(!d||!Array.isArray(d.menus))d=seed();
-  if(!d.done)d.done={};
-  if(!d.missed)d.missed={};
-  if(!d.anchor)d.anchor={date:todayKey(),idx:0};
-  d.menus.forEach((m,i)=>{if(!m.id)m.id=uid();if(!Array.isArray(m.exercises))m.exercises=[];if(!m.color)m.color=COLORS[i%COLORS.length]});
-  return d;
-}
-function seed(){
-  // 初回は例のルーティンを入れておく（設定で自由に変えられる）
-  return {
-    menus:[
-      {id:uid(),name:'腕と肩',exercises:[],color:COLORS[0]},
-      {id:uid(),name:'胸と背中',exercises:[],color:COLORS[1]},
-      {id:uid(),name:'腹筋と脚',exercises:[],color:COLORS[2]}
-    ],
-    anchor:{date:todayKey(),idx:0}, done:{}, missed:{}, lastBackupAt:null
-  };
+  return normalize(d);
 }
 function save(){
   if(!canSave)return;
   try{localStorage.setItem(KEY,JSON.stringify(data))}
   catch(e){toast('保存できませんでした')}
 }
+const partById=id=>data.parts.find(p=>p.id===id);
+const menuParts=m=>m?m.partIds.map(partById).filter(Boolean):[];
+const menuName=m=>menuParts(m).map(p=>p.name).join('・');
+const menuColor=m=>{const ps=menuParts(m);return ps.length?ps[0].color:'#C7CDD4'};
+const dotsHTML=cols=>cols.map(c=>`<span class="dot" style="background:${c}"></span>`).join('');
+const checksOf=key=>data.checks[key]||[];
+/* その日の組み合わせの部位がすべてチェックされていれば実施 */
+function dayDone(key,m){
+  const ps=m?m.partIds:[];
+  if(!ps.length)return false;
+  const c=checksOf(key);
+  return ps.every(id=>c.includes(id));
+}
 
 /* ============ 予定の計算（このアプリの核） ============
-   アンカーの日から1日ずつ進め、その日のメニューは menus[k % n]。
-   - 実施した日だけ k を進める → 実施しなかった日のメニューは翌日にずれ込む
+   アンカーの日から1日ずつ進め、その日の組み合わせは menus[k % n]。
+   - 組み合わせの部位がすべてチェックされた日だけ k を進める → それ以外の日は翌日にずれ込む
    - 今日がまだ未実施でも、明日以降は「今日やる」前提で k を進めて予定を出す
-   - アンカーより前の日は、凍結した名前（done[d].name）だけを表示する
-   返り値: {key: {state, menu, name}}
-     state: done（実施）/ missed（未実施の過去）/ today（今日・未実施）/ plan（未来の予定）
-            / past（アンカー前の実施なしの日：表示なし） */
+   - アンカーより前の日は、凍結した記録（hist）だけを表示する
+   返り値: {key:{state,menu,name,color,checked,frozen}}
+     state: done（実施）/ missed（未実施の過去。一部だけの日も含む）/ today（今日・未実施）
+            / plan（未来の予定）/ past（記録なし） */
 function schedule(fromKey,toKey){
   const res={}, today=todayKey(), n=data.menus.length, A=data.anchor.date;
-  // アンカーより前
   for(let d=parseDK(fromKey);DK(d)<=toKey&&DK(d)<A;d=addDays(d,1)){
-    const k=DK(d), r=data.done[k];
-    const ms=data.missed&&data.missed[k];
-    res[k]=r?{state:'done',menu:null,name:r.name||'実施',color:r.color||''}
-      :ms?{state:'missed',menu:null,name:ms.name,color:ms.color||''}:{state:'past',menu:null,name:'',color:''};
+    const k=DK(d), h=data.hist[k];
+    res[k]=h?{state:h.state,menu:null,name:h.name,color:h.color||'#9AA1A9',checked:[],frozen:h.parts||[]}
+      :{state:'past',menu:null,name:'',color:'',checked:[],frozen:[]};
   }
   if(toKey<A)return res;
   let k=data.anchor.idx;
@@ -418,42 +526,42 @@ function schedule(fromKey,toKey){
     if(key>toKey)break;
     const m=n?data.menus[((k%n)+n)%n]:null;
     let state;
-    if(key<today){state=data.done[key]?'done':'missed';if(data.done[key])k++}
-    else if(key===today){state=data.done[key]?'done':'today';k++}
+    if(!m)state=key>today?'plan':key===today?'today':'past';
+    else if(key<today){if(dayDone(key,m)){state='done';k++}else state='missed'}
+    else if(key===today){state=dayDone(key,m)?'done':'today';k++}
     else{state='plan';k++}
-    if(key>=fromKey)res[key]={state,menu:m,name:m?m.name:''};
+    if(key>=fromKey)res[key]={state,menu:m,name:m?menuName(m):'',color:m?menuColor(m):'',
+      checked:m?checksOf(key).filter(id=>m.partIds.includes(id)):[],frozen:[]};
   }
   return res;
 }
+const dayInfo=key=>schedule(key,key)[key];
 /* 「次にやるメニュー」：今日が未実施なら今日、実施済みなら明日 */
 function nextPoint(){
-  const today=todayKey();
-  const date=data.done[today]?DK(addDays(new Date(),1)):today;
-  const n=data.menus.length;
+  const today=todayKey(), n=data.menus.length;
+  const date=dayInfo(today).state==='done'?DK(addDays(new Date(),1)):today;
   if(!n)return {date,idx:0,menu:null};
-  // date のメニュー位置を求める（date は今日か明日なのでアンカー以降）
   let k=data.anchor.idx;
   for(let d=parseDK(data.anchor.date);DK(d)<date;d=addDays(d,1)){
-    const key=DK(d);
-    if(key<today){if(data.done[key])k++}
+    const key=DK(d), m=data.menus[((k%n)+n)%n];
+    if(key<today){if(dayDone(key,m))k++}
     else k++;                      // 今日（実施済み）
   }
   const idx=((k%n)+n)%n;
   return {date,idx,menu:data.menus[idx]};
 }
-/* アンカーを付け直す。メニューを変えた時・次のメニューを選んだ時に使う。
-   付け直すとアンカーより前の日は計算し直せなくなるので、先にその日のメニュー名を凍結しておく。
-   ※メニューを変更する「前」に凍結すること（変更後だと、新しい並びの名前で凍結してしまう） */
+/* アンカーを付け直す前に、アンカーより前になる日の記録を凍結する。
+   必ず部位・組み合わせを変更する「前」に呼ぶこと（変更後だと新しい名前で凍結してしまう） */
 function freezePast(){
   const np=nextPoint(), A=data.anchor.date;
   const endKey=DK(addDays(parseDK(np.date),-1));
   if(endKey<A)return np;
   const s=schedule(A,endKey);
-  if(!data.missed)data.missed={};
   for(const [k,v] of Object.entries(s)){
-    const color=v.menu?v.menu.color:'';
-    if(v.state==='done'&&data.done[k]&&!data.done[k].name){data.done[k].name=v.name;data.done[k].color=color}
-    if(v.state==='missed')data.missed[k]={name:v.name,color};
+    if((v.state==='done'||v.state==='missed')&&v.menu){
+      data.hist[k]={state:v.state,name:v.name,color:v.color,
+        parts:menuParts(v.menu).map(p=>({name:p.name,color:p.color,done:v.checked.includes(p.id)}))};
+    }
   }
   return np;
 }
@@ -461,12 +569,22 @@ function rebase(newIdx){
   const np=freezePast();
   data.anchor={date:np.date,idx:newIdx};
 }
-function setDone(key,on){
-  if(on)data.done[key]={};
-  else delete data.done[key];
-  save();
+/* 部位・組み合わせを変える時は、いま次にやる組み合わせを id で保ったままアンカーを付け直す */
+function changeRoutine(fn){
+  const np=freezePast();
+  const keepId=np.menu?np.menu.id:null, keepIdx=np.idx;
+  fn();
+  const ids=new Set(data.parts.map(p=>p.id));
+  data.menus.forEach(m=>{m.partIds=m.partIds.filter(x=>ids.has(x))});
+  data.menus=data.menus.filter(m=>m.partIds.length);
+  let idx=data.menus.findIndex(m=>m.id===keepId);
+  if(idx<0)idx=data.menus.length?Math.min(keepIdx,data.menus.length-1):0;
+  data.anchor={date:np.date,idx};
+  save();render();
 }
-const canToggle=key=>key<=todayKey()&&key>=data.anchor.date&&data.menus.length>0;
+const canTogglePart=key=>key<=todayKey()&&key>=data.anchor.date&&data.menus.length>0;
+const dailyFor=key=>data.daily.filter(x=>x.since<=key);
+const canToggleDaily=(key,item)=>key<=todayKey()&&item.since<=key;
 
 /* ============ シート ============ */
 const open=el=>{
@@ -530,52 +648,144 @@ $('askNo').onclick=()=>askClose(false);
   document.addEventListener('mouseup',end);
 })();
 
+/* ============ チェック ============ */
+/* 部位のチェックを書き換える。過去の日で「実施／未実施」が変わる時だけ確認する
+   （それ以降の予定が組み直されるため）。一部だけの変化では予定は動かない */
+async function setParts(key,list){
+  if(!canTogglePart(key))return false;
+  const before=dayInfo(key).state==='done';
+  const prev=checksOf(key);
+  if(list.length)data.checks[key]=list;else delete data.checks[key];
+  const after=dayInfo(key).state==='done';
+  if(key<todayKey()&&before!==after){
+    if(prev.length)data.checks[key]=prev;else delete data.checks[key];
+    const msg=after
+      ?`${md(parseDK(key))} を実施済みにします。\nそれ以降のメニューが組み直されます。`
+      :`${md(parseDK(key))} を未実施に戻します。\nこの日の組み合わせが翌日にずれ込み、それ以降も組み直されます。`;
+    const wasDay=$('daySheet').classList.contains('open');
+    const ok=await ask(msg,after?'実施済みにする':'未実施に戻す');
+    if(wasDay)open($('daySheet'));
+    if(!ok)return false;
+    if(list.length)data.checks[key]=list;else delete data.checks[key];
+    save();render();refreshDay();toast('予定を組み直しました');
+    return true;
+  }
+  save();render();refreshDay();
+  if(!before&&after)toast('おつかれさまでした');
+  return true;
+}
+function togglePart(key,id){
+  const c=checksOf(key);
+  return setParts(key,c.includes(id)?c.filter(x=>x!==id):[...c,id]);
+}
+/* まとめて：全部付いていれば全部外す、そうでなければ全部付ける */
+function toggleAllParts(key){
+  const r=dayInfo(key);if(!r.menu)return;
+  const all=r.menu.partIds.every(id=>r.checked.includes(id));
+  const others=checksOf(key).filter(id=>!r.menu.partIds.includes(id));
+  return setParts(key,all?others:[...others,...r.menu.partIds]);
+}
+function toggleDaily(key,id){
+  const item=data.daily.find(x=>x.id===id);
+  if(!item||!canToggleDaily(key,item))return;
+  const c=data.dailyChecks[key]||[];
+  const nx=c.includes(id)?c.filter(x=>x!==id):[...c,id];
+  if(nx.length)data.dailyChecks[key]=nx;else delete data.dailyChecks[key];
+  save();render();refreshDay();
+}
+/* チェックのボタンは data-pt="日付|部位id" / data-all="日付" / data-dl="日付|項目id" で共通に扱う */
+function onCheckClick(e){
+  const pt=e.target.closest('[data-pt]'), al=e.target.closest('[data-all]'), dl=e.target.closest('[data-dl]');
+  if(pt){const [k,id]=pt.dataset.pt.split('|');togglePart(k,id);return true}
+  if(al){toggleAllParts(al.dataset.all);return true}
+  if(dl){const [k,id]=dl.dataset.dl.split('|');toggleDaily(k,id);return true}
+  return false;
+}
+
 /* ============ 表示 ============ */
 let tab='home';
 let weekStart=mondayOf(new Date());
 let calMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 
 function render(){
-  renderToday();renderStats();renderWeek();renderCal();renderSettings();updateBackupBar();
+  renderToday();renderDaily();renderStats();renderWeek();renderCal();renderSettings();updateBackupBar();
 }
 const dateLabel=d=>`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`;
+const exHTML=list=>list&&list.length?`<ul class="ex-sub">${list.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
 
-function exListHTML(m){
-  return m&&m.exercises.length?m.exercises.map(x=>`<li>${esc(x)}</li>`).join(''):'';
+/* 部位ごとのチェック欄。今日のカードと日の詳細で共通 */
+function partsBlockHTML(key,r){
+  if(r.menu){
+    const can=canTogglePart(key);
+    return menuParts(r.menu).map(p=>{
+      const on=r.checked.includes(p.id);
+      return `<div class="pblock"><div class="prow">
+        <button class="chk sm${on?' on':''}" data-pt="${key}|${p.id}" ${can?'':'disabled'} aria-label="${esc(p.name)}をチェック">✓</button>
+        <span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b></div>${exHTML(p.exercises)}</div>`;
+    }).join('');
+  }
+  // アンカーより前の凍結した記録（表示だけ）
+  return (r.frozen||[]).map(p=>`<div class="pblock"><div class="prow">
+      <button class="chk sm${p.done?' on':' ng'}" disabled style="visibility:visible">${p.done?'✓':'×'}</button>
+      <span class="dot" style="background:${p.color||'#C7CDD4'}"></span><b>${esc(p.name)}</b></div></div>`).join('');
+}
+function dailyBlockHTML(key){
+  const list=dailyFor(key);
+  if(!list.length)return '';
+  const c=data.dailyChecks[key]||[];
+  return list.map(x=>{
+    const on=c.includes(x.id);
+    return `<div class="pblock"><div class="prow">
+      <button class="chk sm${on?' on':''}" data-dl="${key}|${x.id}" ${canToggleDaily(key,x)?'':'disabled'} aria-label="${esc(x.name)}をチェック">✓</button>
+      <b>${esc(x.name)}</b></div>${exHTML(x.exercises)}</div>`;
+  }).join('');
 }
 function renderToday(){
   const el=$('todayCard'), now=new Date(), key=DK(now);
   if(!data.menus.length){
     el.innerHTML=`<div class="today-date">${dateLabel(now)}</div>
-      <div class="today-menu"><b>メニューがありません</b></div>
-      <div class="today-sub">設定タブでルーティンを登録してください。</div>
-      <button class="big-check" id="goSet">ルーティンを登録する</button>`;
+      <div class="today-menu"><b>ルーティンがありません</b></div>
+      <div class="today-sub">設定タブで部位を登録し、日ごとの組み合わせを作ってください。</div>
+      <button class="big-check" id="goSet">ルーティンを作る</button>`;
     $('goSet').onclick=()=>showTab('set');
     return;
   }
   const s=schedule(key,DK(addDays(now,1)));
   const t=s[key], tm=s[DK(addDays(now,1))];
   const done=t.state==='done';
-  const m=t.menu;
+  const cols=t.menu?menuParts(t.menu).map(p=>p.color):[t.color];
+  const total=t.menu?t.menu.partIds.length:0;
   el.innerHTML=`<div class="today-date">今日 ${dateLabel(now)}</div>
-    <div class="today-menu"><span class="dot" style="background:${m?m.color:'#ccc'}"></span><b>${esc(t.name)}</b></div>
-    <div class="today-sub">${done?'おつかれさまでした。':''}明日は ${esc(tm?tm.name:'')}${done?'':'（今日やった場合）'}</div>
-    ${m&&m.exercises.length?`<ul class="ex-list">${exListHTML(m)}</ul>`:''}
-    <button class="big-check${done?' done':''}" id="todayToggle">${done?(canToggle(key)?'✓ 実施済み（タップで取り消す）':'✓ 実施済み'):'実施した'}</button>`;
-  $('todayToggle').onclick=()=>toggleDay(key);
+    <div class="today-menu"><span class="dots">${dotsHTML(cols)}</span><b>${esc(t.name)}</b></div>
+    <div class="today-sub">明日は ${esc(tm?tm.name:'')}${done?'':'（今日ぜんぶやった場合）'}</div>
+    <div>${partsBlockHTML(key,t)}</div>
+    ${done?'<div class="done-banner">✓ 今日のメニュー完了</div>'
+      :canTogglePart(key)&&total>1?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${t.checked.length}/${total}）</button>`:''}`;
 }
+$('todayCard').onclick=onCheckClick;
+function renderDaily(){
+  const el=$('dailyCard'), key=todayKey(), list=dailyFor(key);
+  el.hidden=!list.length;
+  if(!list.length)return;
+  const c=data.dailyChecks[key]||[], n=list.filter(x=>c.includes(x.id)).length;
+  el.innerHTML=`<div class="head-row"><p class="card-title">毎日やること</p><span class="hint num">${n}/${list.length}</span></div>${dailyBlockHTML(key)}`;
+}
+$('dailyCard').onclick=onCheckClick;
 function renderStats(){
   const now=new Date(), today=DK(now);
   const ws=DK(mondayOf(now)), we=DK(addDays(mondayOf(now),6));
   const ms=DK(new Date(now.getFullYear(),now.getMonth(),1)), me=DK(new Date(now.getFullYear(),now.getMonth()+1,0));
+  const from=[DK(addDays(now,-400)),ws,ms].sort()[0];
+  const s=schedule(from,today);
   let w=0,m=0;
-  for(const k of Object.keys(data.done)){
+  for(const [k,v] of Object.entries(s)){
+    if(v.state!=='done')continue;
     if(k>=ws&&k<=we)w++;
     if(k>=ms&&k<=me)m++;
   }
   // 連続：今日が未実施なら昨日から数える（今日はまだこれからなので途切れ扱いにしない）
-  let d=data.done[today]?now:addDays(now,-1), st=0;
-  while(data.done[DK(d)]){st++;d=addDays(d,-1)}
+  let d=s[today]&&s[today].state==='done'?now:addDays(now,-1), st=0;
+  while(s[DK(d)]&&s[DK(d)].state==='done'){st++;d=addDays(d,-1)}
   $('stWeek').textContent=w;$('stMonth').textContent=m;$('stStreak').textContent=st;
 }
 function renderWeek(){
@@ -586,17 +796,20 @@ function renderWeek(){
   for(let i=0;i<7;i++){
     const d=addDays(weekStart,i), key=DK(d), r=s[key];
     const cls=d.getDay()===0?'sun':d.getDay()===6?'sat':'';
-    const tag=r.state==='missed'?'<span class="tag missed">未実施</span>'
-      :r.state==='today'?'<span class="tag today">今日</span>'
+    const total=r.menu?r.menu.partIds.length:0, got=r.checked.length;
+    const part=total&&got>0&&got<total?` ${got}/${total}`:'';
+    const tag=r.state==='missed'?`<span class="tag missed">未実施${part}</span>`
+      :r.state==='today'?`<span class="tag today">今日${part}</span>`
       :r.state==='plan'?'<span class="tag plan">予定</span>':'';
-    const col=r.menu?r.menu.color:(r.color||'#C7CDD4');
-    const dot=r.name?`<span class="dot" style="background:${col}${r.state==='missed'?';opacity:.35':''}"></span>`:'';
+    const cols=r.menu?menuParts(r.menu).map(p=>p.color):r.name?[r.color]:[];
+    const dots=cols.length?`<span class="dots"${r.state==='missed'?' style="opacity:.4"':''}>${dotsHTML(cols)}</span>`:'';
     const nm=r.name||(r.state==='past'?'—':'');
+    const ck=r.state==='done'?' on':part?' half':'';
     html+=`<div class="wrow${key===today?' is-today':''}">
       <div class="wday ${cls}"><b>${d.getDate()}</b>${WD[d.getDay()]}曜</div>
-      <button class="wbody ${r.state}" data-day="${key}">${dot}<span class="nm">${esc(nm)}</span>${tag}</button>
-      <button class="chk${r.state==='done'?' on':''}" data-chk="${key}" aria-label="${md(d)}を実施済みにする"
-        ${canToggle(key)?'':'disabled'}>✓</button>
+      <button class="wbody ${r.state}" data-day="${key}">${dots}<span class="nm">${esc(nm)}</span>${tag}</button>
+      <button class="chk${ck}" data-all="${key}" aria-label="${md(d)}をまとめてチェック"
+        ${canTogglePart(key)&&r.menu?'':'disabled'}>${part?got+'/'+total:'✓'}</button>
     </div>`;
   }
   $('weekList').innerHTML=html;
@@ -604,8 +817,7 @@ function renderWeek(){
     ?'使い始めた日・ルーティンを変えた日より前は、記録の表示だけになります（チェックは変えられません）。':'';
 }
 $('weekList').onclick=e=>{
-  const c=e.target.closest('[data-chk]');
-  if(c){toggleDay(c.dataset.chk);return}
+  if(onCheckClick(e))return;
   const b=e.target.closest('[data-day]');
   if(b)openDay(b.dataset.day);
 };
@@ -627,15 +839,23 @@ function renderCal(){
     if(r.state==='missed')ng++;
     let nm='';
     if(r.name){
-      const bg=r.menu?r.menu.color:(r.color||'#9AA1A9');
-      nm=`<span class="cal-nm ${r.state==='missed'?'missed':r.state==='plan'?'plan':''}" style="background:${bg}">${esc((r.name||'').slice(0,4))}</span>`;
+      nm=`<span class="cal-nm ${r.state==='missed'?'missed':r.state==='plan'?'plan':''}" style="background:${r.color||'#9AA1A9'}">${esc(r.name.slice(0,5))}</span>`;
     }
     const mark=r.state==='done'?'<span class="cal-mark ok">✓</span>':r.state==='missed'?'<span class="cal-mark ng">×</span>':'<span class="cal-mark"></span>';
-    html+=`<button class="${cls}" data-day="${key}"><span class="cal-d">${day}</span>${nm}${mark}</button>`;
+    // 毎日の項目：全部できた日は緑、過去で残った日は灰色の輪
+    const dl=dailyFor(key);
+    let dd='';
+    if(dl.length&&key<=today){
+      const c=data.dailyChecks[key]||[];
+      const all=dl.every(x=>c.includes(x.id));
+      dd=all?'<span class="cal-daily ok"></span>':key<today?'<span class="cal-daily ng"></span>':'';
+    }
+    html+=`<button class="${cls}" data-day="${key}"><span class="cal-d">${day}</span>${nm}${mark}${dd}</button>`;
   }
   $('calGrid').innerHTML=html;
   $('calSum').innerHTML=`実施 <b class="ok">${ok}</b> 日　未実施 <b class="ng">${ng}</b> 日`;
-  $('calLegend').innerHTML=data.menus.map(m=>`<span><i class="dot" style="background:${m.color}"></i>${esc(m.name)}</span>`).join('');
+  $('calLegend').innerHTML=data.parts.map(p=>`<span><i class="dot" style="background:${p.color}"></i>${esc(p.name)}</span>`).join('')
+    +(data.daily.length?'<span><i class="cal-daily ok"></i>毎日の項目ぜんぶ</span>':'');
 }
 $('calGrid').onclick=e=>{const b=e.target.closest('[data-day]');if(b)openDay(b.dataset.day)};
 $('mPrev').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1);renderCal()};
@@ -644,122 +864,191 @@ $('mNext').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMon
 /* ---- 日の詳細 ---- */
 let dayKey=null;
 function openDay(key){dayKey=key;fillDay();open($('daySheet'))}
+function refreshDay(){if(dayKey&&$('daySheet').classList.contains('open'))fillDay()}
 function fillDay(){
-  const key=dayKey, d=parseDK(key), r=schedule(key,key)[key];
+  const key=dayKey, d=parseDK(key), r=dayInfo(key);
   $('dayDate').textContent=(key===todayKey()?'今日 ':'')+dateLabel(d);
-  $('dayDot').style.background=r.menu?r.menu.color:(r.color||'#C7CDD4');
+  const cols=r.menu?menuParts(r.menu).map(p=>p.color):r.name?[r.color]:[];
+  $('dayDots').innerHTML=dotsHTML(cols);
   $('dayMenu').textContent=r.name||'記録なし';
-  $('daySub').textContent={done:'実施済み',missed:'未実施（このメニューは翌日にずれ込みました）',
-    today:'今日のメニュー',plan:'予定（それまで毎日実施した場合）',past:''}[r.state];
-  $('dayEx').innerHTML=exListHTML(r.menu);
-  const t=$('dayToggle');
-  if(canToggle(key)){
-    t.hidden=false;t.className='big-check'+(r.state==='done'?' done':'');
-    t.textContent=r.state==='done'?'✓ 実施済み（タップで取り消す）':'実施した';
-  }else t.hidden=true;
+  const total=r.menu?r.menu.partIds.length:0, got=r.checked.length;
+  $('daySub').textContent={done:'実施済み',
+    missed:got?`一部だけ実施（${got}/${total}）。この組み合わせは翌日にずれ込みました`:'未実施（この組み合わせは翌日にずれ込みました）',
+    today:'今日のメニュー',plan:'予定（それまで毎日ぜんぶ実施した場合）',past:''}[r.state]
+    +(r.state!=='plan'&&!canTogglePart(key)&&key<=todayKey()&&r.state!=='past'?' ・記録の表示だけです':'');
+  const daily=key<=todayKey()?dailyBlockHTML(key):'';
+  $('dayBody').innerHTML=partsBlockHTML(key,r)
+    +(r.menu&&canTogglePart(key)&&total>1&&r.state!=='done'?`<button class="big-check all-btn" data-all="${key}">まとめて実施（${got}/${total}）</button>`:'')
+    +(daily?`<p class="sec-title">毎日やること</p>${daily}`:'');
 }
-$('dayToggle').onclick=async()=>{const k=dayKey;await toggleDay(k);if(dayKey===k&&$('daySheet').classList.contains('open'))fillDay()};
-
-/* 実施チェックの切り替え。過去の日を変えると、それ以降の予定が組み直される */
-async function toggleDay(key){
-  if(!canToggle(key))return;
-  const on=!data.done[key], today=todayKey();
-  if(key<today){
-    const msg=on
-      ?`${md(parseDK(key))} を実施済みにします。\nそれ以降のメニューが組み直されます。`
-      :`${md(parseDK(key))} の実施を取り消します。\nこの日のメニューが翌日にずれ込み、それ以降も組み直されます。`;
-    const wasDay=$('daySheet').classList.contains('open');
-    const ok=await ask(msg,on?'実施済みにする':'取り消す');
-    if(!ok){if(wasDay)open($('daySheet'));return}
-    setDone(key,on);render();
-    if(wasDay){fillDay();open($('daySheet'))}
-    toast('予定を組み直しました');
-    return;
-  }
-  setDone(key,on);render();
-  if(on)toast('おつかれさまでした');
-}
+$('dayBody').onclick=onCheckClick;
 
 /* ---- 設定 ---- */
 function renderSettings(){
+  $('partList').innerHTML=data.parts.length?data.parts.map((p,i)=>`<div class="mrow">
+      <button class="mn" data-ep="${p.id}"><span class="dot" style="background:${p.color}"></span><span>${esc(p.name)}</span>
+        ${p.exercises.length?`<small>${p.exercises.length}種目</small>`:''}</button>
+      <button class="mv" data-pup="${i}" ${i===0?'disabled':''} aria-label="上へ">▲</button>
+      <button class="mv" data-pdown="${i}" ${i===data.parts.length-1?'disabled':''} aria-label="下へ">▼</button>
+    </div>`).join(''):'<p class="hint">まだありません。</p>';
   const ms=data.menus;
   $('menuList').innerHTML=ms.length?ms.map((m,i)=>`<div class="mrow">
       <span class="no">${i+1}</span>
-      <button class="mn" data-edit="${m.id}"><span class="dot" style="background:${m.color}"></span><span>${esc(m.name)}</span>
-        ${m.exercises.length?`<small>${m.exercises.length}種目</small>`:''}</button>
+      <button class="mn" data-em="${m.id}"><span class="dots">${dotsHTML(menuParts(m).map(p=>p.color))}</span><span>${esc(menuName(m))}</span></button>
       <button class="mv" data-up="${i}" ${i===0?'disabled':''} aria-label="上へ">▲</button>
       <button class="mv" data-down="${i}" ${i===ms.length-1?'disabled':''} aria-label="下へ">▼</button>
     </div>`).join(''):'<p class="hint">まだありません。</p>';
+  $('dailyList').innerHTML=data.daily.length?data.daily.map(x=>`<div class="mrow">
+      <button class="mn" data-ed="${x.id}"><span>${esc(x.name)}</span>${x.exercises.length?`<small>${x.exercises.length}種目</small>`:''}</button>
+    </div>`).join(''):'<p class="hint">まだありません。</p>';
   const np=nextPoint();
   $('nextWhen').textContent=np.date===todayKey()?'今日':'明日';
-  $('nextVal').innerHTML=np.menu?`<span class="dot" style="background:${np.menu.color}"></span>${esc(np.menu.name)}`:'—';
+  $('nextVal').innerHTML=np.menu?`<span class="dots">${dotsHTML(menuParts(np.menu).map(p=>p.color))}</span>${esc(menuName(np.menu))}`:'—';
   const lb=$('lastBackupHint');
   if(data.lastBackupAt){
     const d=new Date(data.lastBackupAt), days=Math.floor((Date.now()-d.getTime())/86400000);
     lb.textContent=`最後のバックアップ：${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}（${days===0?'今日':days+'日前'}）`;
   }else lb.textContent='最後のバックアップ：まだありません';
 }
-/* メニューの並びや中身を変える時は、いま次にやるメニューを保ったままアンカーを付け直す */
-function changeMenus(fn){
-  const np=freezePast();            // 変更前の並びで過去を凍結
-  const keepId=np.menu?np.menu.id:null, keepIdx=np.idx;
-  fn();
-  let idx=data.menus.findIndex(m=>m.id===keepId);
-  if(idx<0)idx=data.menus.length?Math.min(keepIdx,data.menus.length-1):0;
-  data.anchor={date:np.date,idx};
-  save();render();
-}
+$('partList').onclick=e=>{
+  const up=e.target.closest('[data-pup]'), dn=e.target.closest('[data-pdown]'), ed=e.target.closest('[data-ep]');
+  if(up||dn){
+    // 部位の並びは表示順だけ。ルーティンには影響しない
+    const i=+(up?up.dataset.pup:dn.dataset.pdown), j=up?i-1:i+1, a=data.parts;
+    [a[i],a[j]]=[a[j],a[i]];save();render();return;
+  }
+  if(ed)openItem('part',ed.dataset.ep);
+};
 $('menuList').onclick=e=>{
-  const up=e.target.closest('[data-up]'), dn=e.target.closest('[data-down]'), ed=e.target.closest('[data-edit]');
+  const up=e.target.closest('[data-up]'), dn=e.target.closest('[data-down]'), ed=e.target.closest('[data-em]');
   if(up||dn){
     const i=+(up?up.dataset.up:dn.dataset.down), j=up?i-1:i+1;
-    changeMenus(()=>{const a=data.menus;[a[i],a[j]]=[a[j],a[i]]});
+    changeRoutine(()=>{const a=data.menus;[a[i],a[j]]=[a[j],a[i]]});
     return;
   }
-  if(ed)openMenu(ed.dataset.edit);
+  if(ed)openMenu(ed.dataset.em);
 };
-let editId=null, editColor=COLORS[0];
-function openMenu(id){
-  editId=id;
-  const m=id?data.menus.find(x=>x.id===id):null;
-  $('menuTitle').textContent=m?'メニューを編集':'メニューを追加';
-  $('mName').value=m?m.name:'';
-  $('mEx').value=m?m.exercises.join('\n'):'';
-  const used=new Set(data.menus.map(x=>x.color));
-  editColor=m?m.color:(COLORS.find(c=>!used.has(c))||COLORS[data.menus.length%COLORS.length]);
-  drawColors();
-  $('mDel').hidden=!m;
-  open($('menuSheet'));
+$('dailyList').onclick=e=>{const ed=e.target.closest('[data-ed]');if(ed)openItem('daily',ed.dataset.ed)};
+
+/* ---- 部位・毎日の項目の編集（同じシートを使う） ---- */
+let itemMode='part', itemId=null, itemColor=COLORS[0];
+function openItem(mode,id){
+  itemMode=mode;itemId=id;
+  const list=mode==='part'?data.parts:data.daily;
+  const x=id?list.find(v=>v.id===id):null;
+  $('itemTitle').textContent=(mode==='part'?'部位':'毎日の項目')+(x?'を編集':'を追加');
+  $('iName').placeholder=mode==='part'?'例：腕':'例：ストレッチ';
+  $('iName').value=x?x.name:'';
+  $('iEx').value=x?x.exercises.join('\n'):'';
+  $('iColorField').hidden=mode!=='part';
+  if(mode==='part'){
+    const used=new Set(data.parts.map(p=>p.color));
+    itemColor=x?x.color:(COLORS.find(c=>!used.has(c))||COLORS[data.parts.length%COLORS.length]);
+    drawColors();
+  }
+  $('iDel').hidden=!x;
+  open($('itemSheet'));
 }
 function drawColors(){
-  $('mColors').innerHTML=COLORS.map(c=>`<button style="background:${c}" data-c="${c}" aria-pressed="${c===editColor}" aria-label="色"></button>`).join('');
+  $('iColors').innerHTML=COLORS.map(c=>`<button style="background:${c}" data-c="${c}" aria-pressed="${c===itemColor}" aria-label="色"></button>`).join('');
 }
-$('mColors').onclick=e=>{const b=e.target.closest('[data-c]');if(b){editColor=b.dataset.c;drawColors()}};
+$('iColors').onclick=e=>{const b=e.target.closest('[data-c]');if(b){itemColor=b.dataset.c;drawColors()}};
+$('addPart').onclick=()=>openItem('part',null);
+$('addDaily').onclick=()=>openItem('daily',null);
+$('iSave').onclick=()=>{
+  const name=$('iName').value.trim();
+  if(!name){toast('名前を入れてください');return}
+  const ex=$('iEx').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const id=itemId;
+  if(itemMode==='part'){
+    if(data.parts.some(p=>p.name===name&&p.id!==id)){toast('同じ名前の部位があります');return}
+    // 名前が変わるとルーティンの表示も変わるので、過去を凍結してから変える
+    changeRoutine(()=>{
+      if(id){const p=partById(id);if(p){p.name=name;p.exercises=ex;p.color=itemColor}}
+      else data.parts.push({id:uid(),name,color:itemColor,exercises:ex});
+    });
+  }else{
+    if(id){const x=data.daily.find(v=>v.id===id);if(x){x.name=name;x.exercises=ex}}
+    else data.daily.push({id:uid(),name,exercises:ex,since:todayKey()});
+    save();render();
+  }
+  closeAll();toast('保存しました');
+};
+$('iDel').onclick=async()=>{
+  const id=itemId;
+  if(itemMode==='part'){
+    const p=partById(id);if(!p)return;
+    const used=data.menus.filter(m=>m.partIds.includes(id));
+    const gone=used.filter(m=>m.partIds.length===1).length;
+    let msg=`「${p.name}」を削除します。`;
+    if(used.length)msg+=`\nルーティンの${used.length}日分から外れます。`+(gone?`\nそのうち${gone}日分は部位がなくなるので、ルーティンから消えます。`:'');
+    msg+='\nこれまでの記録は残ります。';
+    const ok=await ask(msg,'削除する');
+    if(!ok){open($('itemSheet'));return}
+    changeRoutine(()=>{data.parts=data.parts.filter(x=>x.id!==id)});
+  }else{
+    const x=data.daily.find(v=>v.id===id);if(!x)return;
+    const ok=await ask(`「${x.name}」を毎日の項目から削除します。\nこれまでのチェックも表示されなくなります。`,'削除する');
+    if(!ok){open($('itemSheet'));return}
+    data.daily=data.daily.filter(v=>v.id!==id);
+    for(const k of Object.keys(data.dailyChecks)){
+      data.dailyChecks[k]=data.dailyChecks[k].filter(v=>v!==id);
+      if(!data.dailyChecks[k].length)delete data.dailyChecks[k];
+    }
+    save();render();
+  }
+  toast('削除しました');
+};
+
+/* ---- ルーティンの日（部位の組み合わせ）の編集 ---- */
+let menuEditId=null, menuSel=[];
+function openMenu(id){
+  if(!data.parts.length){toast('先に部位を登録してください');return}
+  menuEditId=id;
+  const m=id?data.menus.find(x=>x.id===id):null;
+  menuSel=m?m.partIds.slice():[];
+  $('menuTitle').textContent=m?`${data.menus.indexOf(m)+1}日目の組み合わせ`:'日を追加';
+  $('mDel').hidden=!m;
+  drawChips();
+  open($('menuSheet'));
+}
+function drawChips(){
+  $('mChips').innerHTML=data.parts.map(p=>{
+    const i=menuSel.indexOf(p.id);
+    return `<button data-chip="${p.id}" aria-pressed="${i>=0}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}<span class="ord">${i>=0?i+1:''}</span></button>`;
+  }).join('');
+}
+$('mChips').onclick=e=>{
+  const b=e.target.closest('[data-chip]');if(!b)return;
+  const id=b.dataset.chip;
+  menuSel=menuSel.includes(id)?menuSel.filter(x=>x!==id):[...menuSel,id];
+  drawChips();
+};
 $('addMenu').onclick=()=>openMenu(null);
 $('mSave').onclick=()=>{
-  const name=$('mName').value.trim();
-  if(!name){toast('名前を入れてください');return}
-  const ex=$('mEx').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  const id=editId;
-  changeMenus(()=>{
-    if(id){const m=data.menus.find(x=>x.id===id);if(m){m.name=name;m.exercises=ex;m.color=editColor}}
-    else data.menus.push({id:uid(),name,exercises:ex,color:editColor});
+  if(!menuSel.length){toast('部位を1つ以上選んでください');return}
+  const id=menuEditId, sel=menuSel.slice();
+  changeRoutine(()=>{
+    if(id){const m=data.menus.find(x=>x.id===id);if(m)m.partIds=sel}
+    else data.menus.push({id:uid(),partIds:sel});
   });
   closeAll();toast('保存しました');
 };
 $('mDel').onclick=async()=>{
-  const id=editId, m=data.menus.find(x=>x.id===id);if(!m)return;
-  const ok=await ask(`「${m.name}」をルーティンから削除します。\nこれまでの実施記録は残ります。`,'削除する');
+  const id=menuEditId, m=data.menus.find(x=>x.id===id);if(!m)return;
+  const ok=await ask(`「${menuName(m)}」の日をルーティンから削除します。\n部位とこれまでの記録は残ります。`,'削除する');
   if(!ok){open($('menuSheet'));return}
-  changeMenus(()=>{data.menus=data.menus.filter(x=>x.id!==id)});
+  changeRoutine(()=>{data.menus=data.menus.filter(x=>x.id!==id)});
   toast('削除しました');
 };
+
+/* ---- 次にやるメニュー ---- */
 $('nextBtn').onclick=()=>{
-  if(!data.menus.length){toast('先にメニューを登録してください');return}
+  if(!data.menus.length){toast('先にルーティンを作ってください');return}
   const np=nextPoint();
   $('nextTitle').textContent=(np.date===todayKey()?'今日':'明日')+'やるメニュー';
   $('nextList').innerHTML=data.menus.map((m,i)=>`<button class="pick" data-pick="${i}">
-    <span class="mk">${i===np.idx?'✓':''}</span><span class="dot" style="background:${m.color}"></span>${esc(m.name)}</button>`).join('');
+    <span class="mk">${i===np.idx?'✓':''}</span><span class="dots">${dotsHTML(menuParts(m).map(p=>p.color))}</span>${esc(menuName(m))}</button>`).join('');
   open($('nextSheet'));
 };
 $('nextList').onclick=e=>{
@@ -780,8 +1069,8 @@ async function exportFile(name,obj){
   return true;
 }
 async function doExport(){
-  const obj={app:'kintore',format:1,exportedAt:new Date().toISOString(),
-    menus:data.menus,anchor:data.anchor,done:data.done,missed:data.missed};
+  const {lastBackupAt,...rest}=data;
+  const obj={app:'kintore',exportedAt:new Date().toISOString(),...rest};
   if(await exportFile('kintore.json',obj)){
     data.lastBackupAt=new Date().toISOString();save();render();toast('書き出しました');
   }
@@ -793,23 +1082,18 @@ $('impFile').onchange=async e=>{
   const f=e.target.files&&e.target.files[0];if(!f)return;
   let obj=null;
   try{obj=JSON.parse(await f.text())}catch(err){obj=null}
-  if(!obj||obj.app!=='kintore'||!Array.isArray(obj.menus)){toast('このアプリのファイルではありません');return}
+  if(!obj||obj.app!=='kintore'||!(Array.isArray(obj.parts)||Array.isArray(obj.menus))){toast('このアプリのファイルではありません');return}
   const ok=await ask(`${f.name} を読み込みます。\nいまのルーティンと記録は、ファイルの内容に置き換わります。`,'読み込む');
   if(!ok)return;
-  data.menus=obj.menus;data.anchor=obj.anchor||{date:todayKey(),idx:0};data.done=obj.done||{};data.missed=obj.missed||{};
-  data=normalize(data);save();render();toast('読み込みました');
+  const keep=data.lastBackupAt;
+  delete obj.app;delete obj.exportedAt;
+  data=normalize(obj);data.lastBackupAt=keep;
+  save();render();toast('読み込みました');
 };
-function normalize(d){
-  d.menus.forEach((m,i)=>{if(!m.id)m.id=uid();if(!Array.isArray(m.exercises))m.exercises=[];if(!m.color)m.color=COLORS[i%COLORS.length]});
-  if(!d.done)d.done={};
-  if(!d.missed)d.missed={};
-  if(!d.anchor||!d.anchor.date)d.anchor={date:todayKey(),idx:0};
-  return d;
-}
 let backupDismissed=false;
 function updateBackupBar(){
   const bar=$('backupBar');
-  const has=Object.keys(data.done).length>0;
+  const has=Object.keys(data.checks).length>0||Object.keys(data.hist).length>0;
   const last=data.lastBackupAt?new Date(data.lastBackupAt).getTime():0;
   const days=last?Math.floor((Date.now()-last)/86400000):null;
   const show=has&&!backupDismissed&&(days===null||days>=14);
