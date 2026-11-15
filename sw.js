@@ -1,16 +1,15 @@
-/* 筋トレ：オフラインでも、電波が弱くても即座に開くためのキャッシュ
-   （家計簿と同じ方針：キャッシュ優先 / stale-while-revalidate）
-   - キャッシュがあれば通信を待たずに即返す
-   - 同時に裏で更新を取りに行き、取れたら次回起動時に反映される
-   - 裏の更新は3秒で打ち切る
+/* 家計簿：オフラインでも、電波が弱くても即座に開くためのキャッシュ
 
-   注意：GitHub Pages では家計簿と同じ配信元（neru0225.github.io）になり、
-   キャッシュ置き場を共有する。古い版を消す時は「kintore-」で始まるものだけを消すこと。
-   全部消すと家計簿のキャッシュまで消え、家計簿が機内モードで開けなくなる。
+   方針（キャッシュ優先 / stale-while-revalidate）
+   - キャッシュがあれば通信を待たずに即返す（電波が弱くても起動が遅くならない）
+   - 同時に裏で更新を取りに行き、取れたら次回起動時に反映される
+   - 裏の更新は3秒で打ち切る（弱電波でつかみ続けないため）
+
+   バージョンを上げたら、必ず新しい内容を取り直すこと。
+   ブラウザのHTTPキャッシュから古いファイルを拾わないよう cache:'reload' を使う。
 */
-const PREFIX = 'kintore-';
-const CACHE = PREFIX + 'v0.4';
-const REVALIDATE_TIMEOUT = 3000;
+const CACHE = 'kakeibo-v11.6';
+const REVALIDATE_TIMEOUT = 3000;   // 裏で更新を待つ上限(ms)
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +22,7 @@ const ASSETS = [
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
+      // cache:'reload' でネットワークから確実に最新を取る
       .then(c => Promise.all(
         ASSETS.map(u =>
           fetch(new Request(u, { cache: 'reload' }))
@@ -38,12 +38,13 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      // 自分の古い版だけを消す（同じ配信元の他アプリのキャッシュには触らない）
-      .then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIX) && k !== CACHE).map(k => caches.delete(k))))
+      // 同じ配信元の他アプリ（筋トレなど）のキャッシュには触らない。消すのは自分の古い版だけ
+      .then(ks => Promise.all(ks.filter(k => k.startsWith('kakeibo-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
+/* 指定時間で打ち切る fetch */
 function fetchWithTimeout(req, ms) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timeout')), ms);
@@ -55,12 +56,15 @@ function fetchWithTimeout(req, ms) {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || !req.url.startsWith('http')) return;
+  // 自分の配信元以外（地名検索などの外部API）は素通しする。キャッシュもしない。
   if (new URL(req.url).origin !== self.location.origin) return;
 
   e.respondWith((async () => {
+    // 今の版のキャッシュだけを見る（古い版のキャッシュを拾わないため）
     const cache = await caches.open(CACHE);
     const cached = await cache.match(req);
 
+    // 裏で更新を取りに行く（結果は次回に使う）
     const revalidate = fetchWithTimeout(req, REVALIDATE_TIMEOUT)
       .then(res => {
         if (res && res.status === 200) cache.put(req, res.clone()).catch(() => {});
@@ -68,7 +72,10 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => null);
 
+    // キャッシュがあれば通信を待たずに即返す
     if (cached) return cached;
+
+    // 初回など、キャッシュが無い時だけ通信の結果を待つ
     return (await revalidate) || (await cache.match('./index.html'));
   })());
 });
